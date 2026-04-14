@@ -249,20 +249,32 @@ const isTraditional = ref(false)
 const error = ref('')
 const showAbout = ref(false)
 
-// ── OpenCC converter (Simplified → Traditional) ──
+// ── OpenCC converters ──
+// T→S: normalize any incoming lyrics to Simplified (canonical form)
+const t2sConverter = OpenCC.ConverterFactory(
+  OpenCC.Locale.from.tw,
+  OpenCC.Locale.to.cn
+)
+// S→T: convert Simplified to Traditional for display
 const s2tConverter = OpenCC.ConverterFactory(
   OpenCC.Locale.from.cn,
   OpenCC.Locale.to.tw
 )
 
-// ── Computed: apply character conversion ──
-const displayLyrics = computed<LyricLine[]>(() => {
-  if (!isTraditional.value) return lyrics.value
+// Normalize a line to Simplified Chinese (handles both S and T input)
+function toSimplified(text: string): string {
+  return t2sConverter(text)
+}
 
-  return lyrics.value.map((line) => ({
-    ...line,
-    chinese: s2tConverter(line.chinese),
-  }))
+// ── Computed: always normalize to Simplified, then convert if Traditional is toggled ──
+const displayLyrics = computed<LyricLine[]>(() => {
+  return lyrics.value.map((line) => {
+    const simplified = toSimplified(line.chinese)
+    return {
+      ...line,
+      chinese: isTraditional.value ? s2tConverter(simplified) : simplified,
+    }
+  })
 })
 
 // ── Search handler — fires both sources in parallel on the server ──
