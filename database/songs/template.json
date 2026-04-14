@@ -1,0 +1,19 @@
+{
+  "id": "my_unique_song_id",
+  "name": "Song Title",
+  "artist": "Artist Name",
+  "album": "Album Name (Optional)",
+  "coverUrl": "",
+  "duration": 210000,
+  "meta": {
+    "lyricist": "Lyricist Name",
+    "composer": "Composer Name",
+    "arranger": "Arranger Name",
+    "producer": "Producer Name"
+  },
+  "lyrics": [
+    "This is the first lyric line",
+    "这是第二行歌词",
+    "All timestamps should be removed, just provide exact string arrays."
+  ]
+}

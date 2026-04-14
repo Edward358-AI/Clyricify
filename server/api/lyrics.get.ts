@@ -1,5 +1,8 @@
 import NeteaseApi from 'NeteaseCloudMusicApi'
 const { lyric: neteaseLyric } = NeteaseApi as any
+import fs from 'node:fs'
+import path from 'node:path'
+import process from 'node:process'
 import { pinyin } from 'pinyin-pro'
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai'
 
@@ -150,31 +153,43 @@ export default defineEventHandler(async (event) => {
     return { success: false, lyrics: [], error: 'Missing required parameter: id' }
   }
 
-  const source = id.startsWith('lrclib_') ? 'lrclib' : id.startsWith('netease_') ? 'netease' : null
-  const rawId = id.replace(/^(lrclib|netease)_/, '')
+  const source = id.startsWith('lrclib_') ? 'lrclib' : id.startsWith('netease_') ? 'netease' : id.startsWith('local_') ? 'local' : null
+  const rawId = id.replace(/^(lrclib|netease|local)_/, '')
 
   if (!source) {
     return { success: false, lyrics: [], error: `Unknown source in ID: ${id}` }
   }
 
   try {
-    let rawLrc: string
+    let meta: SongMeta = {}
+    let lyricLines: string[] = []
 
-    switch (source) {
-      case 'lrclib':
-        rawLrc = await fetchLrclibLyrics(rawId, name || '', artist || '')
-        break
-      case 'netease':
-        rawLrc = await fetchNeteaseLyrics(Number(rawId))
-        break
+    if (source === 'local') {
+      const dir = path.resolve(process.cwd(), 'database/songs')
+      const content = fs.readFileSync(path.join(dir, `${rawId}.json`), 'utf-8')
+      const data = JSON.parse(content)
+      meta = data.meta || {}
+      lyricLines = data.lyrics || []
+    } else {
+      let rawLrc: string = ''
+      switch (source) {
+        case 'lrclib':
+          rawLrc = await fetchLrclibLyrics(rawId, name || '', artist || '')
+          break
+        case 'netease':
+          rawLrc = await fetchNeteaseLyrics(Number(rawId))
+          break
+      }
+
+      // Strip timestamps
+      const allLines = stripTimestamps(rawLrc)
+      
+      // Call Gemini API to extract metadata and pure lyric lines
+      const config = useRuntimeConfig()
+      const geminiResult = await processLyricsWithGemini(allLines, config.geminiApiKey)
+      meta = geminiResult.meta
+      lyricLines = geminiResult.lyrics
     }
-
-    // Strip timestamps
-    const allLines = stripTimestamps(rawLrc)
-    
-    // Call Gemini API to extract metadata and pure lyric lines
-    const config = useRuntimeConfig()
-    const { meta, lyrics: lyricLines } = await processLyricsWithGemini(allLines, config.geminiApiKey)
 
     if (!lyricLines || lyricLines.length === 0) {
       return { success: false, lyrics: [], error: 'No lyrics found for this song.' }
@@ -197,7 +212,7 @@ export default defineEventHandler(async (event) => {
     const pinyinMap = new Map<number, string>()
     if (hasChinese) {
       chineseTexts.forEach((text, i) => {
-        pinyinMap.set(chineseIndices[i], pinyin(text, { toneType: 'symbol', type: 'string' }))
+        pinyinMap.set(chineseIndices[i] as number, pinyin(text, { toneType: 'symbol', type: 'string' }))
       })
     }
 
@@ -209,7 +224,7 @@ export default defineEventHandler(async (event) => {
       if (translatedBlock) {
         const englishLines = translatedBlock.split('\n')
         chineseIndices.forEach((originalIdx, i) => {
-          translationMap.set(originalIdx, englishLines[i] || '')
+          translationMap.set(originalIdx as number, englishLines[i] || '')
         })
       }
     }

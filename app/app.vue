@@ -94,9 +94,11 @@
               class="flex-shrink-0 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md"
               :class="selectedSong.source === 'lrclib'
                 ? 'bg-emerald-500/10 text-emerald-400'
-                : 'bg-sky-500/10 text-sky-400'"
+                : selectedSong.source === 'netease'
+                  ? 'bg-sky-500/10 text-sky-400'
+                  : 'bg-amber-500/10 text-amber-500'"
             >
-              {{ selectedSong.source === 'lrclib' ? 'LRCLIB' : 'NetEase' }}
+              {{ selectedSong.source === 'lrclib' ? 'LRCLIB' : selectedSong.source === 'netease' ? 'NetEase' : 'LOCAL DB' }}
             </span>
 
             <!-- Expand details button -->
@@ -287,10 +289,10 @@ interface Song {
   id: string
   name: string
   artist: string
-  album: string
-  coverUrl: string
-  duration: number
-  source: 'lrclib' | 'netease'
+  album?: string
+  coverUrl?: string
+  duration?: number
+  source: 'lrclib' | 'netease' | 'local'
 }
 
 interface LyricLine {
