@@ -1,12 +1,13 @@
 import NeteaseApi from 'NeteaseCloudMusicApi'
 const { lyric: neteaseLyric } = NeteaseApi as any
 import { pinyin } from 'pinyin-pro'
+import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai'
 
 interface LyricLine {
   chinese: string
   pinyin: string
   english: string
-  isPlainText: boolean  // true for English/non-Chinese lines (no pinyin/translation needed)
+  isPlainText: boolean
 }
 
 interface SongMeta {
@@ -35,91 +36,68 @@ function containsChinese(text: string): boolean {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Metadata extraction patterns
+// Gemini AI API Call
+// Separates the raw lines into structural metadata and actual lyrics
 // ─────────────────────────────────────────────────────────────
-const META_PATTERNS: { key: keyof SongMeta; patterns: RegExp[] }[] = [
-  {
-    key: 'lyricist',
-    patterns: [
-      /^(?:作词|填词|词|作詞|填詞|詞)\s*[：:]\s*(.+)/i,
-    ],
-  },
-  {
-    key: 'composer',
-    patterns: [
-      /^(?:作曲|曲|谱曲|作曲者|譜曲)\s*[：:]\s*(.+)/i,
-    ],
-  },
-  {
-    key: 'arranger',
-    patterns: [
-      /^(?:编曲|編曲|编|編)\s*[：:]\s*(.+)/i,
-    ],
-  },
-  {
-    key: 'producer',
-    patterns: [
-      /^(?:制作人|製作人|监制|監製|出品)\s*[：:]\s*(.+)/i,
-    ],
-  },
-]
-
-// Lines that should be filtered out (metadata, credits, copyright, etc.)
-const FILTER_PATTERNS = [
-  // Credits and production metadata (Simplified)
-  /^(?:作词|作曲|编曲|填词|谱曲|制作人?|录音|混音|母带|监制|出品|词|曲|编|OP|SP|音乐总监|和声|秀导|音乐统筹|配唱|弦乐|吉他|贝斯?|鼓|钢琴|键盘|合声|导演|企划|统筹|企宣|宣传|发行|封面|美术|摄影|视觉|文案|策划|特别鸣谢)\s*[：:]/i,
-  // Traditional Chinese variants
-  /^(?:作詞|作曲|編曲|填詞|譜曲|製作人?|錄音|混音|母帶|監製|出品|詞|曲|編|音樂總監|和聲|秀導|音樂統籌)\s*[：:]/i,
-  // English credits
-  /^(?:lyrics|composed?r?|arranged?r?|produced?r?|mixed|master|recorded?|vocal|guitar|bass|drum|piano|keyboard|string|executive|director)\s*[：:by]/i,
-  // Copyright and label info
-  /^(?:©|℗|\(c\)|copyright|powered\s+by|provided\s+by|licensed|all\s+rights|rights?\s+reserved|under\s+exclusive|distributed|published|courtesy|℗&©)/i,
-  // Record label / publisher lines
-  /(?:Records?|Music|Entertainment|Productions?|Studios?|Label|Publishing)\s*(?:Co\.|Inc\.|Ltd\.|LLC|,|$)/i,
-  // Flexible spacing credits
-  /^(?:制作人|製作人)\s+[:：]\s*/i,
-  // Instrumental markers
-  /^(?:纯音乐|純音樂|Instrumental)/i,
-  // Lines entirely enclosed in fancy brackets (usually copyright/declarations like 【本作品声明...】)
-  /^【.*】\s*$/,
-]
-
-function isMetadataLine(line: string): boolean {
-  return FILTER_PATTERNS.some((pattern) => pattern.test(line))
-}
-
-// ─────────────────────────────────────────────────────────────
-// Extract metadata and separate lyric lines from raw lines.
-// Keeps ALL lyric lines (Chinese AND English), only strips metadata.
-// ─────────────────────────────────────────────────────────────
-function extractMetaAndLyrics(lines: string[]): { meta: SongMeta; lyrics: string[] } {
-  const meta: SongMeta = {}
-  const lyricsOut: string[] = []
-
-  for (const line of lines) {
-    // Try to extract metadata
-    let isExtractedMeta = false
-    for (const { key, patterns } of META_PATTERNS) {
-      for (const pattern of patterns) {
-        const match = line.match(pattern)
-        if (match) {
-          meta[key] = match[1].trim()
-          isExtractedMeta = true
-          break
-        }
-      }
-      if (isExtractedMeta) break
-    }
-
-    // Skip if it's extracted metadata or a filtered credit/copyright line
-    if (isExtractedMeta) continue
-    if (isMetadataLine(line)) continue
-
-    // Keep ALL remaining lines (Chinese, English, mixed)
-    lyricsOut.push(line)
+async function processLyricsWithGemini(rawLines: string[], apiKey: string): Promise<{ meta: SongMeta, lyrics: string[] }> {
+  if (!apiKey) {
+    throw new Error('Gemini API key is not configured. Please set GEMINI_API_KEY in your .env file.')
   }
 
-  return { meta, lyrics: lyricsOut }
+  const genAI = new GoogleGenerativeAI(apiKey)
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.5-flash",
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: SchemaType.OBJECT,
+        properties: {
+          metadata: {
+            type: SchemaType.OBJECT,
+            properties: {
+              lyricist: { type: SchemaType.STRING, description: "Name of the lyricist or '作词'. Null if not found." },
+              composer: { type: SchemaType.STRING, description: "Name of the composer or '作曲'. Null if not found." },
+              arranger: { type: SchemaType.STRING, description: "Name of the arranger or '编曲'. Null if not found." },
+              producer: { type: SchemaType.STRING, description: "Name of the producer or '制作人'. Null if not found." }
+            }
+          },
+          lyricLines: {
+            type: SchemaType.ARRAY,
+            items: { type: SchemaType.STRING },
+            description: "List of exactly all actual sung lyric strings in order. Absolutely DO NOT include metadata, credit lines, publishers, instrumental markers, copyright info, system labels, or declarations. Keep all languages."
+          }
+        },
+        required: ["metadata", "lyricLines"]
+      }
+    }
+  })
+
+  const prompt = `You are an expert music lyrics parser.
+I will give you a raw list of lines from an LRC file that has its timestamps removed.
+Your job is to identify and separate the song metadata from the actual sung lyrics.
+
+RULES:
+1. Extract any metadata you can find (lyricist, composer, arranger, producer, etc.). If a field is not found, leave it empty.
+2. Filter out ALL copyright declarations, publishing info, recording studios, "produced by", "mixed by", "all rights reserved", and any other non-sung system text.
+3. Keep ALL the actual sung lyric lines exactly as they are written, including English and Chinese. Maintain their order. Do not translate them.
+4. Return a JSON matching the requested schema.
+
+Raw Lyrics:
+${rawLines.join('\n')}`
+
+  const result = await model.generateContent(prompt)
+  const responseText = result.response.text()
+  
+  try {
+    const data = JSON.parse(responseText)
+    return {
+      meta: data.metadata || {},
+      lyrics: data.lyricLines || []
+    }
+  } catch (e) {
+    console.error("Failed to parse Gemini response:", responseText)
+    throw new Error("Invalid format returned by Gemini AI")
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -161,9 +139,6 @@ async function fetchNeteaseLyrics(songId: number): Promise<string> {
 
 // ─────────────────────────────────────────────────────────────
 // MAIN HANDLER
-// Detects if lyrics are Chinese or English and processes accordingly.
-// Chinese lines → pinyin + translation
-// English/non-Chinese lines → plain text (no processing)
 // ─────────────────────────────────────────────────────────────
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
@@ -194,11 +169,14 @@ export default defineEventHandler(async (event) => {
         break
     }
 
-    // Strip timestamps and extract metadata
+    // Strip timestamps
     const allLines = stripTimestamps(rawLrc)
-    const { meta, lyrics: lyricLines } = extractMetaAndLyrics(allLines)
+    
+    // Call Gemini API to extract metadata and pure lyric lines
+    const config = useRuntimeConfig()
+    const { meta, lyrics: lyricLines } = await processLyricsWithGemini(allLines, config.geminiApiKey)
 
-    if (lyricLines.length === 0) {
+    if (!lyricLines || lyricLines.length === 0) {
       return { success: false, lyrics: [], error: 'No lyrics found for this song.' }
     }
 
