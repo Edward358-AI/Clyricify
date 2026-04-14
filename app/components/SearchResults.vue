@@ -48,14 +48,16 @@
                    px-1.5 py-0.5 rounded-md"
             :class="song.source === 'lrclib'
               ? 'bg-emerald-500/10 text-emerald-400'
-              : 'bg-sky-500/10 text-sky-400'"
+              : song.source === 'netease'
+                ? 'bg-sky-500/10 text-sky-400'
+                : 'bg-amber-500/10 text-amber-500'"
           >
-            {{ song.source === 'lrclib' ? 'LRCLIB' : 'NetEase' }}
+            {{ song.source === 'lrclib' ? 'LRCLIB' : song.source === 'netease' ? 'NetEase' : 'Local DB' }}
           </span>
 
           <!-- Duration -->
           <div class="flex-shrink-0 text-xs text-text-muted tabular-nums">
-            {{ formatDuration(song.duration) }}
+            {{ formatDuration(song.duration as number) }}
           </div>
 
           <!-- Arrow -->
@@ -75,10 +77,10 @@ interface Song {
   id: string
   name: string
   artist: string
-  album: string
-  coverUrl: string
-  duration: number
-  source: 'lrclib' | 'netease'
+  album?: string
+  coverUrl?: string
+  duration?: number
+  source: 'lrclib' | 'netease' | 'local'
 }
 
 defineProps<{
