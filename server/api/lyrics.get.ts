@@ -88,7 +88,31 @@ RULES:
 Raw Lyrics:
 ${rawLines.join('\n')}`
 
-  const result = await model.generateContent(prompt)
+  let result;
+  const maxRetries = 3;
+  let delay = 1000;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      result = await model.generateContent(prompt)
+      break;
+    } catch (error: any) {
+      const isTransient = error.status === 503 || error.message?.includes('503') || error.status === 429 || error.message?.includes('429');
+      
+      if (isTransient && attempt < maxRetries) {
+        console.warn(`[Gemini API] Server busy. Retrying in ${delay}ms (attempt ${attempt}/${maxRetries})...`)
+        await new Promise(resolve => setTimeout(resolve, delay))
+        delay *= 2; // Exponential backoff
+      } else {
+        throw error; // Throw if other error or out of retries
+      }
+    }
+  }
+
+  if (!result) {
+    throw new Error("Failed to communicate with Gemini API after multiple retries.");
+  }
+
   const responseText = result.response.text()
   
   try {
