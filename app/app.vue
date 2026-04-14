@@ -23,7 +23,7 @@
         <div class="flex items-center gap-3">
           <!-- Character toggle (only visible when lyrics are loaded) -->
           <CharacterToggle
-            v-if="lyrics.length > 0"
+            v-if="lyrics.length > 0 && hasChinese"
             v-model:isTraditional="isTraditional"
           />
 
@@ -63,55 +63,111 @@
 
       <!-- Selected song info bar -->
       <div v-if="selectedSong" class="animate-fade-in mb-6">
-        <div class="glass-surface rounded-xl px-5 py-4 flex items-center gap-4">
-          <!-- Album art -->
-          <div class="flex-shrink-0 w-14 h-14 rounded-lg overflow-hidden bg-bg-surface shadow-lg">
-            <img
-              v-if="selectedSong.coverUrl"
-              :src="selectedSong.coverUrl + (selectedSong.source === 'netease' ? '?param=112y112' : '')"
-              :alt="selectedSong.album"
-              class="w-full h-full object-cover"
-            />
-            <div v-else class="w-full h-full flex items-center justify-center text-text-muted">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <path d="M9 18V5l12-2v13"/>
-                <circle cx="6" cy="18" r="3"/>
-                <circle cx="18" cy="16" r="3"/>
-              </svg>
+        <div class="glass-surface rounded-xl overflow-hidden">
+          <!-- Main song row -->
+          <div class="px-5 py-4 flex items-center gap-4">
+            <!-- Album art -->
+            <div class="flex-shrink-0 w-14 h-14 rounded-lg overflow-hidden bg-bg-surface shadow-lg">
+              <img
+                v-if="selectedSong.coverUrl"
+                :src="selectedSong.coverUrl + (selectedSong.source === 'netease' ? '?param=112y112' : '')"
+                :alt="selectedSong.album"
+                class="w-full h-full object-cover"
+              />
+              <div v-else class="w-full h-full flex items-center justify-center text-text-muted">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M9 18V5l12-2v13"/>
+                  <circle cx="6" cy="18" r="3"/>
+                  <circle cx="18" cy="16" r="3"/>
+                </svg>
+              </div>
             </div>
+
+            <!-- Song info -->
+            <div class="flex-1 min-w-0">
+              <p class="text-base font-semibold text-text-primary truncate">{{ selectedSong.name }}</p>
+              <p class="text-sm text-text-muted truncate">{{ selectedSong.artist }}</p>
+            </div>
+
+            <!-- Source badge -->
+            <span
+              class="flex-shrink-0 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md"
+              :class="selectedSong.source === 'lrclib'
+                ? 'bg-emerald-500/10 text-emerald-400'
+                : 'bg-sky-500/10 text-sky-400'"
+            >
+              {{ selectedSong.source === 'lrclib' ? 'LRCLIB' : 'NetEase' }}
+            </span>
+
+            <!-- Expand details button -->
+            <button
+              @click="showDetails = !showDetails"
+              class="flex-shrink-0 p-2 rounded-lg
+                     text-text-muted hover:text-text-primary
+                     hover:bg-bg-hover
+                     transition-all duration-200
+                     cursor-pointer"
+              aria-label="Toggle song details"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                   class="transition-transform duration-200"
+                   :class="showDetails ? 'rotate-180' : ''">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
+
+            <!-- Close button -->
+            <button
+              @click="clearSelection"
+              class="flex-shrink-0 p-2 rounded-lg
+                     text-text-muted hover:text-text-primary
+                     hover:bg-bg-hover
+                     transition-all duration-200
+                     cursor-pointer"
+              aria-label="Clear selection"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
           </div>
 
-          <!-- Song info -->
-          <div class="flex-1 min-w-0">
-            <p class="text-base font-semibold text-text-primary truncate">{{ selectedSong.name }}</p>
-            <p class="text-sm text-text-muted truncate">{{ selectedSong.artist }}</p>
-          </div>
-
-          <!-- Source badge -->
-          <span
-            class="flex-shrink-0 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md"
-            :class="selectedSong.source === 'lrclib'
-              ? 'bg-emerald-500/10 text-emerald-400'
-              : 'bg-sky-500/10 text-sky-400'"
-          >
-            {{ selectedSong.source === 'lrclib' ? 'LRCLIB' : 'NetEase' }}
-          </span>
-
-          <!-- Close button -->
-          <button
-            @click="clearSelection"
-            class="flex-shrink-0 p-2 rounded-lg
-                   text-text-muted hover:text-text-primary
-                   hover:bg-bg-hover
-                   transition-all duration-200
-                   cursor-pointer"
-            aria-label="Clear selection"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"/>
-              <line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
+          <!-- Expandable details panel -->
+          <Transition name="expand">
+            <div v-if="showDetails" class="border-t border-border-subtle px-5 py-4">
+              <div class="grid grid-cols-2 gap-x-6 gap-y-2.5">
+                <div v-if="selectedSong.name">
+                  <span class="text-[10px] uppercase tracking-wider text-text-muted/60 font-medium">Song</span>
+                  <p class="text-sm text-text-primary mt-0.5">{{ selectedSong.name }}</p>
+                </div>
+                <div v-if="selectedSong.artist">
+                  <span class="text-[10px] uppercase tracking-wider text-text-muted/60 font-medium">Artist</span>
+                  <p class="text-sm text-text-primary mt-0.5">{{ selectedSong.artist }}</p>
+                </div>
+                <div v-if="selectedSong.album">
+                  <span class="text-[10px] uppercase tracking-wider text-text-muted/60 font-medium">Album</span>
+                  <p class="text-sm text-text-primary mt-0.5">{{ selectedSong.album }}</p>
+                </div>
+                <div v-if="songMeta.lyricist">
+                  <span class="text-[10px] uppercase tracking-wider text-text-muted/60 font-medium">Lyricist</span>
+                  <p class="text-sm text-text-primary mt-0.5">{{ songMeta.lyricist }}</p>
+                </div>
+                <div v-if="songMeta.composer">
+                  <span class="text-[10px] uppercase tracking-wider text-text-muted/60 font-medium">Composer</span>
+                  <p class="text-sm text-text-primary mt-0.5">{{ songMeta.composer }}</p>
+                </div>
+                <div v-if="songMeta.arranger">
+                  <span class="text-[10px] uppercase tracking-wider text-text-muted/60 font-medium">Arranger</span>
+                  <p class="text-sm text-text-primary mt-0.5">{{ songMeta.arranger }}</p>
+                </div>
+                <div v-if="songMeta.producer">
+                  <span class="text-[10px] uppercase tracking-wider text-text-muted/60 font-medium">Producer</span>
+                  <p class="text-sm text-text-primary mt-0.5">{{ songMeta.producer }}</p>
+                </div>
+              </div>
+            </div>
+          </Transition>
         </div>
       </div>
 
@@ -237,6 +293,7 @@ interface LyricLine {
   chinese: string
   pinyin: string
   english: string
+  isPlainText?: boolean
 }
 
 // ── State ──
@@ -248,6 +305,9 @@ const isLoadingLyrics = ref(false)
 const isTraditional = ref(false)
 const error = ref('')
 const showAbout = ref(false)
+const showDetails = ref(false)
+const songMeta = ref<{ lyricist?: string; composer?: string; arranger?: string; producer?: string }>({})
+const hasChinese = ref(true)
 
 // ── OpenCC converters ──
 // T→S: normalize any incoming lyrics to Simplified (canonical form)
@@ -266,9 +326,12 @@ function toSimplified(text: string): string {
   return t2sConverter(text)
 }
 
-// ── Computed: always normalize to Simplified, then convert if Traditional is toggled ──
+// ── Computed: normalize Chinese lines, skip plain text lines ──
 const displayLyrics = computed<LyricLine[]>(() => {
   return lyrics.value.map((line) => {
+    // Don't convert plain text (English) lines
+    if (line.isPlainText) return line
+
     const simplified = toSimplified(line.chinese)
     return {
       ...line,
@@ -312,7 +375,7 @@ async function handleSelectSong(song: Song) {
   lyrics.value = []
 
   try {
-    const data = await $fetch<{ success: boolean; lyrics: LyricLine[]; error?: string }>('/api/lyrics', {
+    const data = await $fetch<{ success: boolean; lyrics: LyricLine[]; meta?: any; hasChinese?: boolean; error?: string }>('/api/lyrics', {
       params: {
         id: song.id,
         name: song.name,
@@ -322,6 +385,8 @@ async function handleSelectSong(song: Song) {
 
     if (data.success) {
       lyrics.value = data.lyrics
+      songMeta.value = data.meta || {}
+      hasChinese.value = data.hasChinese !== false
     } else {
       error.value = data.error || 'No lyrics found for this song.'
     }
@@ -338,5 +403,8 @@ function clearSelection() {
   lyrics.value = []
   error.value = ''
   isTraditional.value = false
+  showDetails.value = false
+  songMeta.value = {}
+  hasChinese.value = true
 }
 </script>

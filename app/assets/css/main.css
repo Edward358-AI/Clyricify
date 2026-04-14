@@ -150,3 +150,17 @@ body {
   opacity: 0;
 }
 
+/* ── Expand transitions (collapsible details) ── */
+.expand-enter-active,
+.expand-leave-active {
+  transition: opacity 0.2s ease, max-height 0.2s ease;
+  max-height: 300px;
+  overflow: hidden;
+}
+.expand-enter-from,
+.expand-leave-to {
+  opacity: 0;
+  max-height: 0;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
