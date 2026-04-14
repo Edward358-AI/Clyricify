@@ -137,33 +137,33 @@
           <Transition name="expand">
             <div v-if="showDetails" class="border-t border-border-subtle px-5 py-4">
               <div class="grid grid-cols-2 gap-x-6 gap-y-2.5">
-                <div v-if="selectedSong.name">
+                <div>
                   <span class="text-[10px] uppercase tracking-wider text-text-muted/60 font-medium">Song</span>
-                  <p class="text-sm text-text-primary mt-0.5">{{ selectedSong.name }}</p>
+                  <p class="text-sm text-text-primary mt-0.5">{{ selectedSong.name || '-' }}</p>
                 </div>
-                <div v-if="selectedSong.artist">
+                <div>
                   <span class="text-[10px] uppercase tracking-wider text-text-muted/60 font-medium">Artist</span>
-                  <p class="text-sm text-text-primary mt-0.5">{{ selectedSong.artist }}</p>
+                  <p class="text-sm text-text-primary mt-0.5">{{ selectedSong.artist || '-' }}</p>
                 </div>
-                <div v-if="selectedSong.album">
+                <div>
                   <span class="text-[10px] uppercase tracking-wider text-text-muted/60 font-medium">Album</span>
-                  <p class="text-sm text-text-primary mt-0.5">{{ selectedSong.album }}</p>
+                  <p class="text-sm text-text-primary mt-0.5">{{ selectedSong.album || '-' }}</p>
                 </div>
-                <div v-if="songMeta.lyricist">
+                <div>
                   <span class="text-[10px] uppercase tracking-wider text-text-muted/60 font-medium">Lyricist</span>
-                  <p class="text-sm text-text-primary mt-0.5">{{ songMeta.lyricist }}</p>
+                  <p class="text-sm text-text-primary mt-0.5">{{ formatMeta(songMeta.lyricist) }}</p>
                 </div>
-                <div v-if="songMeta.composer">
+                <div>
                   <span class="text-[10px] uppercase tracking-wider text-text-muted/60 font-medium">Composer</span>
-                  <p class="text-sm text-text-primary mt-0.5">{{ songMeta.composer }}</p>
+                  <p class="text-sm text-text-primary mt-0.5">{{ formatMeta(songMeta.composer) }}</p>
                 </div>
-                <div v-if="songMeta.arranger">
+                <div>
                   <span class="text-[10px] uppercase tracking-wider text-text-muted/60 font-medium">Arranger</span>
-                  <p class="text-sm text-text-primary mt-0.5">{{ songMeta.arranger }}</p>
+                  <p class="text-sm text-text-primary mt-0.5">{{ formatMeta(songMeta.arranger) }}</p>
                 </div>
-                <div v-if="songMeta.producer">
+                <div>
                   <span class="text-[10px] uppercase tracking-wider text-text-muted/60 font-medium">Producer</span>
-                  <p class="text-sm text-text-primary mt-0.5">{{ songMeta.producer }}</p>
+                  <p class="text-sm text-text-primary mt-0.5">{{ formatMeta(songMeta.producer) }}</p>
                 </div>
               </div>
             </div>
@@ -253,11 +253,15 @@
               <span class="text-accent mt-0.5">✦</span>
               <p class="text-sm text-text-secondary"><span class="text-text-primary font-medium">Character toggle</span> — Instant Simplified ↔ Traditional switching</p>
             </div>
+            <div class="flex items-start gap-3">
+              <span class="text-accent mt-0.5">✦</span>
+              <p class="text-sm text-text-secondary"><span class="text-text-primary font-medium">Smart Extraction</span> — Copyright filtering & metadata parsing via Gemini AI</p>
+            </div>
           </div>
 
           <!-- Tech stack -->
           <div class="flex flex-wrap gap-2 mb-6">
-            <span v-for="tech in ['Nuxt 4', 'Vue 3', 'Tailwind v4', 'pinyin-pro', 'opencc-js']" :key="tech"
+            <span v-for="tech in ['Nuxt 4', 'Vue 3', 'Tailwind v4', 'pinyin-pro', 'opencc-js', 'Gemini AI']" :key="tech"
               class="text-[10px] font-medium uppercase tracking-wider px-2 py-1 rounded-md bg-bg-surface text-text-muted border border-border-subtle">
               {{ tech }}
             </span>
@@ -308,6 +312,11 @@ const showAbout = ref(false)
 const showDetails = ref(false)
 const songMeta = ref<{ lyricist?: string; composer?: string; arranger?: string; producer?: string }>({})
 const hasChinese = ref(true)
+
+function formatMeta(val: string | undefined | null) {
+  if (!val || val.toLowerCase() === 'null') return '-'
+  return val
+}
 
 // ── OpenCC converters ──
 // T→S: normalize any incoming lyrics to Simplified (canonical form)
