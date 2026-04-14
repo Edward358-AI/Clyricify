@@ -20,22 +20,33 @@
                animate-fade-in"
         :style="{ animationDelay: `${index * 50}ms`, animationFillMode: 'backwards' }"
       >
-        <!-- Chinese characters -->
-        <p class="text-xl font-semibold leading-relaxed tracking-wide text-text-primary
-                  transition-colors duration-200 group-hover:text-accent"
-           style="font-family: var(--font-chinese), var(--font-sans);">
-          {{ line.chinese }}
-        </p>
+        <!-- Plain text line (English / non-Chinese) -->
+        <template v-if="line.isPlainText">
+          <p class="text-lg font-medium leading-relaxed text-text-primary
+                    transition-colors duration-200 group-hover:text-accent">
+            {{ line.chinese }}
+          </p>
+        </template>
 
-        <!-- Pinyin -->
-        <p class="text-sm leading-relaxed text-text-secondary mt-1 italic">
-          {{ line.pinyin }}
-        </p>
+        <!-- Chinese line with pinyin + translation -->
+        <template v-else>
+          <!-- Chinese characters -->
+          <p class="text-xl font-semibold leading-relaxed tracking-wide text-text-primary
+                    transition-colors duration-200 group-hover:text-accent"
+             style="font-family: var(--font-chinese), var(--font-sans);">
+            {{ line.chinese }}
+          </p>
 
-        <!-- English translation -->
-        <p v-if="line.english" class="text-sm leading-relaxed text-text-muted mt-0.5">
-          {{ line.english }}
-        </p>
+          <!-- Pinyin -->
+          <p v-if="line.pinyin" class="text-sm leading-relaxed text-text-secondary mt-1 italic">
+            {{ line.pinyin }}
+          </p>
+
+          <!-- English translation -->
+          <p v-if="line.english" class="text-sm leading-relaxed text-text-muted mt-0.5">
+            {{ line.english }}
+          </p>
+        </template>
       </div>
     </div>
 
@@ -58,6 +69,7 @@ interface LyricLine {
   chinese: string
   pinyin: string
   english: string
+  isPlainText?: boolean
 }
 
 defineProps<{
