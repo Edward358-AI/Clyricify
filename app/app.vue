@@ -27,6 +27,20 @@
             v-model:isTraditional="isTraditional"
           />
 
+          <!-- Github button -->
+          <a
+            href="https://github.com/Edward358-AI/Clyricify"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="p-2 rounded-lg text-text-muted hover:text-text-primary
+                   hover:bg-bg-hover transition-all duration-200 cursor-pointer"
+            aria-label="GitHub Repository"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+            </svg>
+          </a>
+
           <!-- About button -->
           <button
             @click="showAbout = true"
@@ -194,7 +208,7 @@
     <footer class="w-full border-t border-border-subtle mt-auto">
       <div class="max-w-3xl mx-auto px-6 py-4 text-center">
         <p class="text-xs text-text-muted/50">
-          Lyrics sourced from LRCLIB · NetEase · KuGou · Translations via Google
+          Lyrics sourced from LRCLIB · NetEase · KuGou · LOCAL DB · Translations via Google
         </p>
       </div>
     </footer>
@@ -243,7 +257,7 @@
           <div class="space-y-3 mb-6">
             <div class="flex items-start gap-3">
               <span class="text-accent mt-0.5">✦</span>
-              <p class="text-sm text-text-secondary"><span class="text-text-primary font-medium">Multi-source search</span> — Results from LRCLIB, NetEase, and KuGou combined</p>
+              <p class="text-sm text-text-secondary"><span class="text-text-primary font-medium">Multi-source search</span> — Results from LRCLIB, NetEase, KuGou, and LOCAL DB combined</p>
             </div>
             <div class="flex items-start gap-3">
               <span class="text-accent mt-0.5">✦</span>
