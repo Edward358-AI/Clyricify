@@ -96,9 +96,11 @@
                 ? 'bg-emerald-500/10 text-emerald-400'
                 : selectedSong.source === 'netease'
                   ? 'bg-sky-500/10 text-sky-400'
-                  : 'bg-amber-500/10 text-amber-500'"
+                  : selectedSong.source === 'kugou'
+                    ? 'bg-fuchsia-500/10 text-fuchsia-400'
+                    : 'bg-amber-500/10 text-amber-500'"
             >
-              {{ selectedSong.source === 'lrclib' ? 'LRCLIB' : selectedSong.source === 'netease' ? 'NetEase' : 'LOCAL DB' }}
+              {{ selectedSong.source === 'lrclib' ? 'LRCLIB' : selectedSong.source === 'netease' ? 'NetEase' : selectedSong.source === 'kugou' ? 'KuGou' : 'LOCAL DB' }}
             </span>
 
             <!-- Expand details button -->
@@ -192,7 +194,7 @@
     <footer class="w-full border-t border-border-subtle mt-auto">
       <div class="max-w-3xl mx-auto px-6 py-4 text-center">
         <p class="text-xs text-text-muted/50">
-          Lyrics sourced from LRCLIB · NetEase · Translations via Google
+          Lyrics sourced from LRCLIB · NetEase · KuGou · Translations via Google
         </p>
       </div>
     </footer>
@@ -241,7 +243,7 @@
           <div class="space-y-3 mb-6">
             <div class="flex items-start gap-3">
               <span class="text-accent mt-0.5">✦</span>
-              <p class="text-sm text-text-secondary"><span class="text-text-primary font-medium">Multi-source search</span> — Results from LRCLIB and NetEase combined</p>
+              <p class="text-sm text-text-secondary"><span class="text-text-primary font-medium">Multi-source search</span> — Results from LRCLIB, NetEase, and KuGou combined</p>
             </div>
             <div class="flex items-start gap-3">
               <span class="text-accent mt-0.5">✦</span>
@@ -292,7 +294,7 @@ interface Song {
   album?: string
   coverUrl?: string
   duration?: number
-  source: 'lrclib' | 'netease' | 'local'
+  source: 'lrclib' | 'netease' | 'kugou' | 'local'
 }
 
 interface LyricLine {

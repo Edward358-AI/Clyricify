@@ -5,6 +5,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { pinyin } from 'pinyin-pro'
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai'
+import Meting from '@meting/core'
 
 interface LyricLine {
   chinese: string
@@ -19,6 +20,11 @@ interface SongMeta {
   arranger?: string
   producer?: string
   album?: string
+}
+
+interface ProcessedLyrics {
+  meta: SongMeta
+  lyrics: string[]
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -39,17 +45,155 @@ function containsChinese(text: string): boolean {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Gemini AI API Call
-// Separates the raw lines into structural metadata and actual lyrics
+// TIER 3 FALLBACK: Code-based lyrics extractor
+// Pure regex/heuristic approach — no AI needed
 // ─────────────────────────────────────────────────────────────
-async function processLyricsWithGemini(rawLines: string[], apiKey: string): Promise<{ meta: SongMeta, lyrics: string[] }> {
+function extractLyricsWithCode(rawLines: string[]): ProcessedLyrics {
+  const meta: SongMeta = {}
+  const lyricLines: string[] = []
+
+  // Metadata patterns (Chinese & English)
+  const metaPatterns: { key: keyof SongMeta; patterns: RegExp[] }[] = [
+    {
+      key: 'lyricist',
+      patterns: [
+        /^作词\s*[：:]\s*(.+)/i,
+        /^词\s*[：:]\s*(.+)/i,
+        /^lyricist\s*[：:]\s*(.+)/i,
+        /^words?\s*[：:]\s*(.+)/i,
+        /^作词作曲\s*[：:]\s*(.+)/i,
+      ]
+    },
+    {
+      key: 'composer',
+      patterns: [
+        /^作曲\s*[：:]\s*(.+)/i,
+        /^曲\s*[：:]\s*(.+)/i,
+        /^composer\s*[：:]\s*(.+)/i,
+        /^music\s*[：:]\s*(.+)/i,
+      ]
+    },
+    {
+      key: 'arranger',
+      patterns: [
+        /^编曲\s*[：:]\s*(.+)/i,
+        /^arranger?\s*[：:]\s*(.+)/i,
+        /^arrangement\s*[：:]\s*(.+)/i,
+      ]
+    },
+    {
+      key: 'producer',
+      patterns: [
+        /^制作人\s*[：:]\s*(.+)/i,
+        /^producer\s*[：:]\s*(.+)/i,
+        /^制作\s*[：:]\s*(.+)/i,
+      ]
+    },
+  ]
+
+  // Lines to filter out (copyright, system text, instrumental markers, etc.)
+  const filterPatterns: RegExp[] = [
+    /^[\s]*$/,
+    /©/,
+    /℗/,
+    /all\s*rights?\s*reserved/i,
+    /produced\s*by/i,
+    /mixed\s*by/i,
+    /mastered\s*by/i,
+    /recorded\s*(at|by)/i,
+    /recording\s*studio/i,
+    /publishing/i,
+    /^OP\s*[：:]/i,
+    /^SP\s*[：:]/i,
+    /^TP\s*[：:]/i,
+    /^MV\s*[：:]/i,
+    /https?:\/\//i,
+    /www\./i,
+    /^纯音乐[，,]?\s*请欣赏/,
+    /^\s*instrumental\s*$/i,
+    /^此歌曲为没有填词的纯音乐/,
+    /^监制\s*[：:]/i,
+    /^企划\s*[：:]/i,
+    /^统筹\s*[：:]/i,
+    /^录音\s*[：:]/i,
+    /^混音\s*[：:]/i,
+    /^母带\s*[：:]/i,
+    /^出品\s*[：:]/i,
+    /^发行\s*[：:]/i,
+    /^吉他\s*[：:]/i,
+    /^贝斯\s*[：:]/i,
+    /^鼓\s*[：:]/i,
+    /^弦乐\s*[：:]/i,
+    /^钢琴\s*[：:]/i,
+    /^和声\s*[：:]/i,
+    /^配唱\s*[：:]/i,
+    /^音乐总监\s*[：:]/i,
+    /^vocal\s*(production|producer|recording|editing|arrangement)\s*[：:]/i,
+    /^guitar\s*[：:]/i,
+    /^bass\s*[：:]/i,
+    /^drums?\s*[：:]/i,
+    /^piano\s*[：:]/i,
+    /^strings?\s*[：:]/i,
+    /^mixing\s*(engineer)?\s*[：:]/i,
+    /^mastering\s*(engineer)?\s*[：:]/i,
+    /^executive\s*producer\s*[：:]/i,
+    /^a\u0026r\s*[：:]/i,
+  ]
+
+  for (const line of rawLines) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+
+    // Try to extract metadata
+    let isMetadata = false
+    for (const { key, patterns } of metaPatterns) {
+      for (const pattern of patterns) {
+        const match = trimmed.match(pattern)
+        if (match) {
+          // Special case: 作词作曲 sets both lyricist and composer
+          if (/^作词作曲/.test(trimmed)) {
+            meta.lyricist = match[1]!.trim()
+            meta.composer = match[1]!.trim()
+          } else {
+            meta[key] = match[1]!.trim()
+          }
+          isMetadata = true
+          break
+        }
+      }
+      if (isMetadata) break
+    }
+    if (isMetadata) continue
+
+    // Check if line should be filtered out
+    let shouldFilter = false
+    for (const pattern of filterPatterns) {
+      if (pattern.test(trimmed)) {
+        shouldFilter = true
+        break
+      }
+    }
+    if (shouldFilter) continue
+
+    // Remaining lines are actual lyrics
+    lyricLines.push(trimmed)
+  }
+
+  console.log('[Code Extractor] Extracted', lyricLines.length, 'lyric lines and metadata:', JSON.stringify(meta))
+  return { meta, lyrics: lyricLines }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Gemini AI API Call (shared logic for Tier 1 & Tier 2)
+// ─────────────────────────────────────────────────────────────
+async function callGemini(rawLines: string[], apiKey: string, modelName: string): Promise<ProcessedLyrics> {
   if (!apiKey) {
-    throw new Error('Gemini API key is not configured. Please set GEMINI_API_KEY in your .env file.')
+    throw new Error(`Gemini API key is not configured for model ${modelName}.`)
   }
 
   const genAI = new GoogleGenerativeAI(apiKey)
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
+    model: modelName,
     generationConfig: {
       responseMimeType: "application/json",
       responseSchema: {
@@ -88,33 +232,9 @@ RULES:
 Raw Lyrics:
 ${rawLines.join('\n')}`
 
-  let result;
-  const maxRetries = 3;
-  let delay = 1000;
-
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      result = await model.generateContent(prompt)
-      break;
-    } catch (error: any) {
-      const isTransient = error.status === 503 || error.message?.includes('503') || error.status === 429 || error.message?.includes('429');
-      
-      if (isTransient && attempt < maxRetries) {
-        console.warn(`[Gemini API] Server busy. Retrying in ${delay}ms (attempt ${attempt}/${maxRetries})...`)
-        await new Promise(resolve => setTimeout(resolve, delay))
-        delay *= 2; // Exponential backoff
-      } else {
-        throw error; // Throw if other error or out of retries
-      }
-    }
-  }
-
-  if (!result) {
-    throw new Error("Failed to communicate with Gemini API after multiple retries.");
-  }
-
+  const result = await model.generateContent(prompt)
   const responseText = result.response.text()
-  
+
   try {
     const data = JSON.parse(responseText)
     return {
@@ -125,6 +245,42 @@ ${rawLines.join('\n')}`
     console.error("Failed to parse Gemini response:", responseText)
     throw new Error("Invalid format returned by Gemini AI")
   }
+}
+
+// ─────────────────────────────────────────────────────────────
+// 3-Tier Fallback Cascade
+// Tier 1: gemini-2.5-flash (primary key)
+// Tier 2: gemini-2.5-flash-lite (fallback key)
+// Tier 3: Code-based extractor (no AI)
+// ─────────────────────────────────────────────────────────────
+async function processLyricsWithFallback(rawLines: string[], primaryKey: string, fallbackKey: string): Promise<ProcessedLyrics> {
+  // ── Tier 1: gemini-2.5-flash with primary key ──
+  try {
+    console.log('[Lyrics] Tier 1: Trying gemini-2.5-flash...')
+    const result = await callGemini(rawLines, primaryKey, 'gemini-2.5-flash')
+    console.log('[Lyrics] Tier 1 succeeded.')
+    return result
+  } catch (err: any) {
+    console.warn('[Lyrics] Tier 1 failed:', err.message || err)
+  }
+
+  // ── Tier 2: gemini-2.5-flash-lite with fallback key ──
+  if (fallbackKey) {
+    try {
+      console.log('[Lyrics] Tier 2: Trying gemini-2.5-flash-lite with fallback key...')
+      const result = await callGemini(rawLines, fallbackKey, 'gemini-2.5-flash-lite')
+      console.log('[Lyrics] Tier 2 succeeded.')
+      return result
+    } catch (err: any) {
+      console.warn('[Lyrics] Tier 2 failed:', err.message || err)
+    }
+  } else {
+    console.warn('[Lyrics] Tier 2 skipped: No GEMINI_API_FALLBACK key configured.')
+  }
+
+  // ── Tier 3: Code-based extractor ──
+  console.log('[Lyrics] Tier 3: Falling back to code-based lyric extractor...')
+  return extractLyricsWithCode(rawLines)
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -165,6 +321,27 @@ async function fetchNeteaseLyrics(songId: number): Promise<string> {
 }
 
 // ─────────────────────────────────────────────────────────────
+// KuGou Lyrics — via @meting/core npm package
+// Uses the lyric_id from the Meting search result
+// ─────────────────────────────────────────────────────────────
+async function fetchKugouLyrics(songId: string): Promise<string> {
+  const meting = new Meting('kugou')
+  meting.format(true)
+
+  const lyricResult = await meting.lyric(songId)
+  const data = JSON.parse(lyricResult)
+
+  // Meting returns { lyric: "...", tlyric: "..." } when formatted
+  const lrc = data?.lyric || data?.lrc || ''
+
+  if (!lrc || lrc.trim().length === 0) {
+    throw new Error('KuGou (Meting) returned empty lyrics')
+  }
+
+  return lrc
+}
+
+// ─────────────────────────────────────────────────────────────
 // MAIN HANDLER
 // ─────────────────────────────────────────────────────────────
 export default defineEventHandler(async (event) => {
@@ -177,8 +354,12 @@ export default defineEventHandler(async (event) => {
     return { success: false, lyrics: [], error: 'Missing required parameter: id' }
   }
 
-  const source = id.startsWith('lrclib_') ? 'lrclib' : id.startsWith('netease_') ? 'netease' : id.startsWith('local_') ? 'local' : null
-  const rawId = id.replace(/^(lrclib|netease|local)_/, '')
+  const source = id.startsWith('lrclib_') ? 'lrclib'
+    : id.startsWith('netease_') ? 'netease'
+    : id.startsWith('kugou_') ? 'kugou'
+    : id.startsWith('local_') ? 'local'
+    : null
+  const rawId = id.replace(/^(lrclib|netease|kugou|local)_/, '')
 
   if (!source) {
     return { success: false, lyrics: [], error: `Unknown source in ID: ${id}` }
@@ -196,6 +377,8 @@ export default defineEventHandler(async (event) => {
       lyricLines = data.lyrics || []
     } else {
       let rawLrc: string = ''
+      const config = useRuntimeConfig()
+
       switch (source) {
         case 'lrclib':
           rawLrc = await fetchLrclibLyrics(rawId, name || '', artist || '')
@@ -203,16 +386,18 @@ export default defineEventHandler(async (event) => {
         case 'netease':
           rawLrc = await fetchNeteaseLyrics(Number(rawId))
           break
+        case 'kugou':
+          rawLrc = await fetchKugouLyrics(rawId)
+          break
       }
 
       // Strip timestamps
       const allLines = stripTimestamps(rawLrc)
       
-      // Call Gemini API to extract metadata and pure lyric lines
-      const config = useRuntimeConfig()
-      const geminiResult = await processLyricsWithGemini(allLines, config.geminiApiKey)
-      meta = geminiResult.meta
-      lyricLines = geminiResult.lyrics
+      // 3-tier fallback: Gemini Flash → Gemini Flash Lite → Code extractor
+      const processed = await processLyricsWithFallback(allLines, config.geminiApiKey, config.geminiApiFallback)
+      meta = processed.meta
+      lyricLines = processed.lyrics
     }
 
     if (!lyricLines || lyricLines.length === 0) {

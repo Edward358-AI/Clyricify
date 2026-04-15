@@ -50,9 +50,11 @@
               ? 'bg-emerald-500/10 text-emerald-400'
               : song.source === 'netease'
                 ? 'bg-sky-500/10 text-sky-400'
-                : 'bg-amber-500/10 text-amber-500'"
+                : song.source === 'kugou'
+                  ? 'bg-fuchsia-500/10 text-fuchsia-400'
+                  : 'bg-amber-500/10 text-amber-500'"
           >
-            {{ song.source === 'lrclib' ? 'LRCLIB' : song.source === 'netease' ? 'NetEase' : 'Local DB' }}
+            {{ song.source === 'lrclib' ? 'LRCLIB' : song.source === 'netease' ? 'NetEase' : song.source === 'kugou' ? 'KuGou' : 'Local DB' }}
           </span>
 
           <!-- Duration -->
@@ -80,7 +82,7 @@ interface Song {
   album?: string
   coverUrl?: string
   duration?: number
-  source: 'lrclib' | 'netease' | 'local'
+  source: 'lrclib' | 'netease' | 'kugou' | 'local'
 }
 
 defineProps<{
