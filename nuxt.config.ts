@@ -7,6 +7,7 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     geminiApiKey: process.env.GEMINI_API_KEY || '',
+    geminiApiFallback: process.env.GEMINI_API_FALLBACK || '',
   },
 
   css: ['~/assets/css/main.css'],

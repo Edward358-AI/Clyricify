@@ -2,6 +2,7 @@ import NeteaseApi from 'NeteaseCloudMusicApi'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
+import Meting from '@meting/core'
 const { cloudsearch } = NeteaseApi as any
 
 interface SongResult {
@@ -11,7 +12,7 @@ interface SongResult {
   album?: string
   coverUrl?: string
   duration?: number
-  source: 'lrclib' | 'netease' | 'local'
+  source: 'lrclib' | 'netease' | 'kugou' | 'local'
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -65,6 +66,29 @@ async function searchNetease(query: string): Promise<SongResult[]> {
 }
 
 // ─────────────────────────────────────────────────────────────
+// KuGou Search — via @meting/core npm package
+// ─────────────────────────────────────────────────────────────
+async function searchKugou(query: string): Promise<SongResult[]> {
+  const meting = new Meting('kugou')
+  meting.format(true)
+
+  const searchResult = await meting.search(query, { page: 1, limit: 10 })
+  const songs = JSON.parse(searchResult)
+
+  if (!Array.isArray(songs)) return []
+
+  return songs.map((song: any) => ({
+    id: `kugou_${song.id}`,
+    name: song.name || '',
+    artist: Array.isArray(song.artist) ? song.artist.join(', ') : (song.artist || ''),
+    album: song.album || '',
+    coverUrl: '',
+    duration: 0,
+    source: 'kugou' as const,
+  }))
+}
+
+// ─────────────────────────────────────────────────────────────
 // LOCAL JSON Search
 // ─────────────────────────────────────────────────────────────
 async function searchLocal(query: string): Promise<SongResult[]> {
@@ -109,7 +133,7 @@ async function searchLocal(query: string): Promise<SongResult[]> {
 
 // ─────────────────────────────────────────────────────────────
 // MAIN HANDLER
-// Fires BOTH sources in parallel, merges & interleaves results.
+// Fires ALL sources in parallel, merges & interleaves results.
 // Each result is tagged with its source for routing lyrics later.
 // ─────────────────────────────────────────────────────────────
 export default defineEventHandler(async (event) => {
@@ -125,22 +149,25 @@ export default defineEventHandler(async (event) => {
     const searchPromises = [
       searchLrclib(q),
       searchNetease(q),
+      searchKugou(q),
       searchLocal(q)
     ]
     const settled = await Promise.allSettled(searchPromises)
 
     const lrclib: SongResult[] = (settled[0]?.status === 'fulfilled') ? ((settled[0] as any).value || []) : []
     const netease: SongResult[] = (settled[1]?.status === 'fulfilled') ? ((settled[1] as any).value || []) : []
-    const localDb: SongResult[] = (settled[2]?.status === 'fulfilled') ? ((settled[2] as any).value || []) : []
+    const kugou: SongResult[] = (settled[2]?.status === 'fulfilled') ? ((settled[2] as any).value || []) : []
+    const localDb: SongResult[] = (settled[3]?.status === 'fulfilled') ? ((settled[3] as any).value || []) : []
 
     // Interleave results: alternate between sources for variety,
     // then append any remaining from the longer list
     const merged: SongResult[] = []
-    const maxLen = Math.max(lrclib.length, netease.length, localDb.length)
+    const maxLen = Math.max(lrclib.length, netease.length, kugou.length, localDb.length)
 
     for (let i = 0; i < maxLen; i++) {
       if (i < lrclib.length && lrclib[i]) merged.push((lrclib as any)[i])
       if (i < netease.length && netease[i]) merged.push((netease as any)[i])
+      if (i < kugou.length && kugou[i]) merged.push((kugou as any)[i])
       if (i < localDb.length && localDb[i]) merged.push((localDb as any)[i])
     }
 
