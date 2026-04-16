@@ -404,6 +404,10 @@ export default defineEventHandler(async (event) => {
       return { success: false, lyrics: [], error: 'No lyrics found for this song.' }
     }
 
+    // Normalize lyric lines to resolve Unicode inconsistencies (like Kangxi Radicals)
+    // ensuring `pinyin-pro` and other tools identify chars as CJK Unified Ideographs
+    lyricLines = lyricLines.map(line => line.normalize('NFKC'))
+
     // Separate Chinese and non-Chinese lines, tracking their indices
     const chineseIndices: number[] = []
     const chineseTexts: string[] = []
