@@ -3,6 +3,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import Meting from '@meting/core'
+import { db } from '../database'
+import { songs } from '../database/schema'
+import { like, or } from 'drizzle-orm'
 const { cloudsearch } = NeteaseApi as any
 
 interface SongResult {
@@ -89,41 +92,46 @@ async function searchKugou(query: string): Promise<SongResult[]> {
 }
 
 // ─────────────────────────────────────────────────────────────
-// LOCAL JSON Search
+// LOCAL Search (SQLite + JSON fallback)
 // ─────────────────────────────────────────────────────────────
 async function searchLocal(query: string): Promise<SongResult[]> {
   try {
-    const dir = path.resolve(process.cwd(), 'database/songs')
-    if (!fs.existsSync(dir)) return []
-    
-    const files = fs.readdirSync(dir)
     const results: SongResult[] = []
-    
-    for (const file of files) {
-      if (!file.endsWith('.json')) continue
-      if (file === 'template.json') continue
-      
-      const content = fs.readFileSync(path.join(dir, file), 'utf-8')
-      try {
-        const data = JSON.parse(content)
-        const nameMatch = data.name?.toLowerCase().includes(query.toLowerCase())
-        const artistMatch = data.artist?.toLowerCase().includes(query.toLowerCase())
+
+    // Search legacy JSON fallback (custom local songs)
+    const dir = path.resolve(process.cwd(), 'database/songs')
+    if (fs.existsSync(dir)) {
+      const files = fs.readdirSync(dir)
+      for (const file of files) {
+        if (!file.endsWith('.json')) continue
+        if (file === 'template.json') continue
         
-        if (nameMatch || artistMatch) {
-          results.push({
-            id: `local_${file.replace('.json', '')}`,
-            name: data.name || 'Unknown',
-            artist: data.artist || 'Unknown',
-            album: data.album || '',
-            coverUrl: data.coverUrl || '',
-            duration: data.duration || 0,
-            source: 'local'
-          })
+        const content = fs.readFileSync(path.join(dir, file), 'utf-8')
+        try {
+          const data = JSON.parse(content)
+          const nameMatch = data.name?.toLowerCase().includes(query.toLowerCase())
+          const artistMatch = data.artist?.toLowerCase().includes(query.toLowerCase())
+          
+          if (nameMatch || artistMatch) {
+            const id = `local_${file.replace('.json', '')}`
+            if (!results.find(r => r.id === id)) {
+              results.push({
+                id,
+                name: data.name || 'Unknown',
+                artist: data.artist || 'Unknown',
+                album: data.album || '',
+                coverUrl: data.coverUrl || '',
+                duration: data.duration || 0,
+                source: 'local'
+              })
+            }
+          }
+        } catch (e) {
+          console.error(`Error parsing JSON file ${file}:`, e)
         }
-      } catch (e) {
-        console.error(`Error parsing JSON file ${file}:`, e)
       }
     }
+    
     return results
   } catch (error) {
     console.error("[Local DB] Search failed", error)
@@ -159,16 +167,17 @@ export default defineEventHandler(async (event) => {
     const kugou: SongResult[] = (settled[2]?.status === 'fulfilled') ? ((settled[2] as any).value || []) : []
     const localDb: SongResult[] = (settled[3]?.status === 'fulfilled') ? ((settled[3] as any).value || []) : []
 
-    // Interleave results: alternate between sources for variety,
-    // then append any remaining from the longer list
+    // Interleave results: alternate between sources for variety
     const merged: SongResult[] = []
+    
+    // Custom local songs shouldn't be filtered out, we prioritize them
     const maxLen = Math.max(lrclib.length, netease.length, kugou.length, localDb.length)
 
     for (let i = 0; i < maxLen; i++) {
+      if (i < localDb.length && localDb[i]) merged.push((localDb as any)[i]) // prioritize custom local DB
       if (i < lrclib.length && lrclib[i]) merged.push((lrclib as any)[i])
       if (i < netease.length && netease[i]) merged.push((netease as any)[i])
       if (i < kugou.length && kugou[i]) merged.push((kugou as any)[i])
-      if (i < localDb.length && localDb[i]) merged.push((localDb as any)[i])
     }
 
     return { results: merged }

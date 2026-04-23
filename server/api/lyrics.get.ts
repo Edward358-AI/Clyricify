@@ -6,6 +6,9 @@ import process from 'node:process'
 import { pinyin } from 'pinyin-pro'
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai'
 import Meting from '@meting/core'
+import { db } from '../database'
+import { songs } from '../database/schema'
+import { eq } from 'drizzle-orm'
 
 interface LyricLine {
   chinese: string
@@ -33,7 +36,10 @@ interface ProcessedLyrics {
 function stripTimestamps(lrcText: string): string[] {
   return lrcText
     .split('\n')
+    // Remove timestamps like [00:12.34]
     .map((line) => line.replace(/\[\d{2}:\d{2}[.:]\d{2,3}\]/g, '').trim())
+    // Remove LRC metadata tags like [ti:Title], [ar:Artist], [id:$0000000]
+    .map((line) => line.replace(/\[[a-zA-Z0-9_]+:[^\]]*\]/g, '').trim())
     .filter((line) => line.length > 0)
 }
 
@@ -349,6 +355,9 @@ export default defineEventHandler(async (event) => {
   const id = query.id as string
   const name = query.name as string
   const artist = query.artist as string
+  const forceRefresh = query.forceRefresh === 'true'
+  const isBackground = query.isBackground === 'true'
+  const context = query.context as string
 
   if (!id) {
     return { success: false, lyrics: [], error: 'Missing required parameter: id' }
@@ -368,13 +377,40 @@ export default defineEventHandler(async (event) => {
   try {
     let meta: SongMeta = {}
     let lyricLines: string[] = []
+    let cachedFromDb = false
 
-    if (source === 'local') {
+    // Check SQLite cache first
+    const cachedSong = await db.query.songs.findFirst({
+      where: eq(songs.id, id)
+    })
+
+    if (!forceRefresh && cachedSong && cachedSong.lastUpdated > 0 && cachedSong.lyricsJson) {
+      meta = cachedSong.metaJson ? JSON.parse(cachedSong.metaJson) : {}
+      lyricLines = JSON.parse(cachedSong.lyricsJson)
+      cachedFromDb = true
+      console.log(`[Cache Hit] Served lyrics for ${id} from SQLite DB`)
+
+      // Trigger background update if applicable
+      if (!isBackground && source !== 'local') {
+        const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+        const needsUpdate = context === 'search' || (Date.now() - cachedSong.lastUpdated > SEVEN_DAYS);
+        if (needsUpdate) {
+           import('../utils/updateQueue').then(({ lyricUpdateQueue }) => {
+             lyricUpdateQueue.push({ id, name: name || '', artist: artist || '' });
+           });
+        }
+      }
+
+    } else if (source === 'local') {
       const dir = path.resolve(process.cwd(), 'database/songs')
       const content = fs.readFileSync(path.join(dir, `${rawId}.json`), 'utf-8')
       const data = JSON.parse(content)
-      meta = data.meta || {}
-      lyricLines = data.lyrics || []
+      return { 
+        success: true, 
+        lyrics: data.lyrics || [], 
+        meta: data.meta || {}, 
+        hasChinese: data.lyrics.some((l: any) => l.chinese && l.chinese.trim().length > 0)
+      }
     } else {
       let rawLrc: string = ''
       const config = useRuntimeConfig()
@@ -391,13 +427,22 @@ export default defineEventHandler(async (event) => {
           break
       }
 
-      // Strip timestamps
-      const allLines = stripTimestamps(rawLrc)
-      
-      // 3-tier fallback: Gemini Flash → Gemini Flash Lite → Code extractor
-      const processed = await processLyricsWithFallback(allLines, config.geminiApiKey, config.geminiApiFallback)
-      meta = processed.meta
-      lyricLines = processed.lyrics
+      // Skip Gemini if this is a background update and the raw LRC hasn't changed
+      let skippedGemini = false;
+      if (isBackground && cachedSong && cachedSong.rawLrc === rawLrc) {
+        console.log(`[Background] rawLrc unchanged for ${id}. Skipping Gemini.`);
+        meta = cachedSong.metaJson ? JSON.parse(cachedSong.metaJson) : {}
+        lyricLines = cachedSong.lyricsJson ? JSON.parse(cachedSong.lyricsJson) : []
+        skippedGemini = true;
+      } else {
+        // Strip timestamps
+        const allLines = stripTimestamps(rawLrc)
+        
+        // 3-tier fallback: Gemini Flash → Gemini Flash Lite → Code extractor
+        const processed = await processLyricsWithFallback(allLines, config.geminiApiKey, config.geminiApiFallback)
+        meta = processed.meta
+        lyricLines = processed.lyrics
+      }
     }
 
     if (!lyricLines || lyricLines.length === 0) {
@@ -452,6 +497,46 @@ export default defineEventHandler(async (event) => {
         isPlainText: !isChinese,
       }
     })
+
+    // Save to SQLite Cache if it was freshly fetched
+    if (!cachedFromDb && source !== 'local') {
+      try {
+        await db.insert(songs).values({
+          id,
+          name: name || 'Unknown',
+          artist: artist || 'Unknown',
+          source: source as string,
+          rawLrc: rawLrc || null,
+          metaJson: JSON.stringify(meta),
+          lyricsJson: JSON.stringify(lyricLines), // Cache original lines
+          hasChinese: hasChinese,
+          lastUpdated: Date.now()
+        }).onConflictDoUpdate({
+          target: songs.id,
+          set: {
+            rawLrc: rawLrc || null,
+            metaJson: JSON.stringify(meta),
+            lyricsJson: JSON.stringify(lyricLines),
+            hasChinese: hasChinese,
+            lastUpdated: Date.now()
+          }
+        });
+      } catch (cacheErr) {
+        console.error('Failed to cache to SQLite:', cacheErr);
+      }
+      
+      // If it's a background update and we actually processed new lyrics (didn't skip Gemini), emit SSE event!
+      if (isBackground && typeof skippedGemini !== 'undefined' && !skippedGemini) {
+        import('../utils/eventBus').then(({ lyricEventBus }) => {
+          lyricEventBus.emit('updated', {
+            id,
+            lyrics,
+            meta,
+            hasChinese
+          })
+        });
+      }
+    }
 
     return { success: true, lyrics, meta, hasChinese }
   } catch (error: any) {
