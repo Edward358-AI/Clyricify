@@ -1,7 +1,7 @@
 import { db } from '../../database';
 import { users } from '../../database/schema';
 import crypto from 'crypto';
-import { createSession } from '../../utils/session';
+import { createUserSession } from '../../utils/session';
 import { eq } from 'drizzle-orm';
 
 export default defineEventHandler(async (event) => {
@@ -33,7 +33,7 @@ export default defineEventHandler(async (event) => {
     createdAt: Date.now()
   });
 
-  await createSession(event, userId);
+  await createUserSession(event, userId);
 
   return { success: true, user: { id: userId, username } };
 });

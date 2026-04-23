@@ -1,10 +1,10 @@
-import { requireUser } from '../../utils/session';
+import { requireAuthUser } from '../../utils/session';
 import { db } from '../../database';
 import { playlists } from '../../database/schema';
 import crypto from 'crypto';
 
 export default defineEventHandler(async (event) => {
-  const user = await requireUser(event);
+  const user = await requireAuthUser(event);
   const body = await readBody(event);
   
   if (!body.name || body.name.trim() === '') {
