@@ -8,6 +8,8 @@ export default defineNuxtConfig({
   runtimeConfig: {
     geminiApiKey: process.env.GEMINI_API_KEY || '',
     geminiApiFallback: process.env.GEMINI_API_FALLBACK || '',
+    tursoDbUrl: process.env.TURSO_DATABASE_URL || '',
+    tursoDbAuthToken: process.env.TURSO_AUTH_TOKEN || '',
   },
 
   css: ['~/assets/css/main.css'],
