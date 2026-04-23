@@ -12,6 +12,7 @@
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",
     "@google/generative-ai": "^0.24.1",
+    "@libsql/client": "^0.17.2",
     "@meting/core": "^1.6.1",
     "@tailwindcss/vite": "^4.2.2",
     "better-sqlite3": "^12.9.0",
