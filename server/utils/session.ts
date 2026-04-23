@@ -7,7 +7,7 @@ import crypto from 'crypto';
 const SESSION_COOKIE = 'clyricify_session';
 const SESSION_EXPIRATION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
-export async function createSession(event: H3Event, userId: string) {
+export async function createUserSession(event: H3Event, userId: string) {
   const sessionId = crypto.randomUUID();
   const expiresAt = Date.now() + SESSION_EXPIRATION_MS;
 
@@ -25,7 +25,7 @@ export async function createSession(event: H3Event, userId: string) {
   });
 }
 
-export async function requireUser(event: H3Event) {
+export async function requireAuthUser(event: H3Event) {
   const sessionId = getCookie(event, SESSION_COOKIE);
   if (!sessionId) {
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
@@ -55,15 +55,15 @@ export async function requireUser(event: H3Event) {
   };
 }
 
-export async function getUser(event: H3Event) {
+export async function getAuthUser(event: H3Event) {
   try {
-    return await requireUser(event);
+    return await requireAuthUser(event);
   } catch (err) {
     return null;
   }
 }
 
-export async function clearSession(event: H3Event) {
+export async function clearUserSession(event: H3Event) {
   const sessionId = getCookie(event, SESSION_COOKIE);
   if (sessionId) {
     await db.delete(sessions).where(eq(sessions.id, sessionId));

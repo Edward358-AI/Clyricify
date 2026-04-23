@@ -1,7 +1,7 @@
 import { db } from '../../database';
 import { users } from '../../database/schema';
 import crypto from 'crypto';
-import { createSession } from '../../utils/session';
+import { createUserSession } from '../../utils/session';
 import { eq } from 'drizzle-orm';
 
 export default defineEventHandler(async (event) => {
@@ -27,7 +27,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Invalid credentials' });
   }
 
-  await createSession(event, user.id);
+  await createUserSession(event, user.id);
 
   return { success: true, user: { id: user.id, username: user.username } };
 });

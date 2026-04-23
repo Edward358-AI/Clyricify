@@ -1,10 +1,10 @@
-import { requireUser } from '../../../../utils/session';
+import { requireAuthUser } from '../../../../utils/session';
 import { db } from '../../../../database';
 import { playlists, playlistSongs, songs } from '../../../../database/schema';
 import { eq, and } from 'drizzle-orm';
 
 export default defineEventHandler(async (event) => {
-  const user = await requireUser(event);
+  const user = await requireAuthUser(event);
   const playlistId = getRouterParam(event, 'id');
   const songId = getRouterParam(event, 'songId');
 
