@@ -11,10 +11,10 @@
       <div class="max-w-3xl mx-auto px-6 py-5 flex items-center justify-between">
         <!-- Logo -->
         <div class="flex items-center gap-3">
-          <div class="w-9 h-9 rounded-lg bg-accent/10 border border-accent/20 flex items-center justify-center">
-            <span class="text-accent font-bold text-lg leading-none" style="font-family: var(--font-chinese);">词</span>
+          <div class="w-8 h-8 rounded-lg bg-accent/10 border border-accent/20 flex items-center justify-center">
+            <span class="text-accent font-bold text-base leading-none" style="font-family: var(--font-chinese);">词</span>
           </div>
-          <h1 class="text-lg font-bold text-text-primary tracking-tight">
+          <h1 class="text-base sm:text-lg font-bold text-text-primary tracking-tight">
             Clyricify
           </h1>
         </div>
@@ -27,13 +27,66 @@
             v-model:isTraditional="isTraditional"
           />
 
+          <!-- Account Dropdown -->
+          <div class="relative">
+            <!-- Account Icon Button -->
+            <button
+              @click="showAccountDropdown = !showAccountDropdown"
+              class="p-2 rounded-lg text-text-muted hover:text-text-primary hover:bg-bg-hover transition-all duration-200"
+              title="Account"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+            </button>
+
+            <!-- Overlay to close dropdown when clicking outside -->
+            <div v-if="showAccountDropdown" class="fixed inset-0 z-40" @click="showAccountDropdown = false"></div>
+
+            <!-- Dropdown Menu -->
+            <Transition
+              enter-active-class="transition duration-100 ease-out"
+              enter-from-class="transform scale-95 opacity-0"
+              enter-to-class="transform scale-100 opacity-100"
+              leave-active-class="transition duration-75 ease-in"
+              leave-from-class="transform scale-100 opacity-100"
+              leave-to-class="transform scale-95 opacity-0"
+            >
+              <div v-if="showAccountDropdown" class="absolute right-0 mt-2 w-48 bg-bg-surface border border-border-subtle rounded-xl shadow-xl z-50 overflow-hidden">
+                <template v-if="currentUser">
+                  <div class="px-4 py-3 border-b border-border-subtle">
+                    <p class="text-sm font-medium text-text-primary truncate">{{ currentUser.username }}</p>
+                  </div>
+                  <div class="p-1">
+                    <button @click="showPlaylists = true; showAccountDropdown = false" class="w-full text-left px-3 py-2 text-sm text-text-secondary hover:text-text-primary hover:bg-bg-hover rounded-lg transition-colors">
+                      View Playlists
+                    </button>
+                  </div>
+                  <div class="p-1 border-t border-border-subtle">
+                    <button @click="logout(); showAccountDropdown = false" class="w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
+                      Log Out
+                    </button>
+                  </div>
+                </template>
+                <template v-else>
+                  <div class="p-1">
+                    <button @click="showAuthModal = true; showAccountDropdown = false" class="w-full text-left px-3 py-2 text-sm text-text-secondary hover:text-text-primary hover:bg-bg-hover rounded-lg transition-colors">
+                      Log In / Sign Up
+                    </button>
+                  </div>
+                </template>
+              </div>
+            </Transition>
+          </div>
+
           <!-- Github button -->
           <a
             href="https://github.com/Edward358-AI/Clyricify"
             target="_blank"
             rel="noopener noreferrer"
             class="p-2 rounded-lg text-text-muted hover:text-text-primary
-                   hover:bg-bg-hover transition-all duration-200 cursor-pointer"
+                   hover:bg-bg-hover transition-all duration-200"
             aria-label="GitHub Repository"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -45,7 +98,7 @@
           <button
             @click="showAbout = true"
             class="p-2 rounded-lg text-text-muted hover:text-text-primary
-                   hover:bg-bg-hover transition-all duration-200 cursor-pointer"
+                   hover:bg-bg-hover transition-all duration-200"
             aria-label="About Clyricify"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -69,9 +122,10 @@
         />
 
         <SearchResults
-          v-if="searchResults.length > 0 && !selectedSong"
+          v-if="searchResults.length > 0"
           :results="searchResults"
-          @select="handleSelectSong"
+          @select="s => handleSelectSong(s, 'search')"
+          @addToPlaylist="handleAddToPlaylist"
         />
       </div>
 
@@ -117,14 +171,39 @@
               {{ selectedSong.source === 'lrclib' ? 'LRCLIB' : selectedSong.source === 'netease' ? 'NetEase' : selectedSong.source === 'kugou' ? 'KuGou' : 'LOCAL DB' }}
             </span>
 
+            <!-- Add to Playlist button -->
+            <button
+              @click="handleAddToPlaylist(selectedSong)"
+              class="flex-shrink-0 p-2 rounded-lg text-text-muted hover:text-accent hover:bg-bg-surface transition-all duration-200"
+              title="Add to Playlist"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+            </button>
+
+            <!-- Refresh button -->
+            <button
+              @click="handleManualRefresh"
+              :disabled="isRefreshing"
+              class="flex-shrink-0 p-2 rounded-lg text-text-muted hover:text-accent hover:bg-bg-surface transition-all duration-200 disabled:opacity-50"
+              title="Refresh Lyrics"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" :class="{'animate-spin': isRefreshing}">
+                <polyline points="23 4 23 10 17 10"/>
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+              </svg>
+            </button>
+
             <!-- Expand details button -->
             <button
               @click="showDetails = !showDetails"
               class="flex-shrink-0 p-2 rounded-lg
                      text-text-muted hover:text-text-primary
                      hover:bg-bg-hover
-                     transition-all duration-200
-                     cursor-pointer"
+                     transition-all duration-200"
               aria-label="Toggle song details"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
@@ -140,8 +219,7 @@
               class="flex-shrink-0 p-2 rounded-lg
                      text-text-muted hover:text-text-primary
                      hover:bg-bg-hover
-                     transition-all duration-200
-                     cursor-pointer"
+                     transition-all duration-200"
               aria-label="Clear selection"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -212,6 +290,26 @@
         </p>
       </div>
     </footer>
+
+    <AuthModal
+      :isOpen="showAuthModal"
+      @close="showAuthModal = false"
+      @success="handleLoginSuccess"
+    />
+
+    <PlaylistsSidebar
+      ref="playlistsSidebarRef"
+      :isOpen="showPlaylists"
+      @close="showPlaylists = false"
+      @play="handlePlayFromPlaylist"
+    />
+
+    <PlaylistSelectorModal
+      :isOpen="showPlaylistSelector"
+      :song="songToAddToPlaylist"
+      @close="showPlaylistSelector = false"
+      @added="handleSongAddedToPlaylist"
+    />
 
     <!-- About Modal -->
     <Transition name="modal">
@@ -299,6 +397,7 @@
 
 <script setup lang="ts">
 import * as OpenCC from 'opencc-js'
+import { onMounted } from 'vue'
 
 // ── Types ──
 interface Song {
@@ -324,12 +423,80 @@ const selectedSong = ref<Song | null>(null)
 const lyrics = ref<LyricLine[]>([])
 const isSearching = ref(false)
 const isLoadingLyrics = ref(false)
+const isRefreshing = ref(false)
+const refreshCooldowns = ref<Record<string, number>>({})
 const isTraditional = ref(false)
 const error = ref('')
 const showAbout = ref(false)
 const showDetails = ref(false)
 const songMeta = ref<{ lyricist?: string; composer?: string; arranger?: string; producer?: string }>({})
 const hasChinese = ref(true)
+
+const currentUser = ref<any>(null)
+const showAuthModal = ref(false)
+const showPlaylists = ref(false)
+const playlistsSidebarRef = ref<any>(null)
+const showPlaylistSelector = ref(false)
+const showAccountDropdown = ref(false)
+const songToAddToPlaylist = ref<Song | null>(null)
+
+onMounted(async () => {
+  try {
+    const data = await $fetch<{ user: any }>('/api/auth/me')
+    currentUser.value = data.user
+  } catch (e) {
+    // Not logged in
+  }
+
+  // Connect to Server-Sent Events stream for background updates
+  if (import.meta.client) {
+    const eventSource = new EventSource('/api/stream')
+    
+    eventSource.addEventListener('lyrics_updated', (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        // If the updated song is the one currently being displayed, hot-swap it!
+        if (selectedSong.value && data.id === selectedSong.value.id) {
+          lyrics.value = data.lyrics
+          songMeta.value = data.meta || {}
+          hasChinese.value = data.hasChinese !== false
+          console.log(`[Hot Swap] Lyrics for ${data.id} updated in background!`)
+        }
+      } catch (err) {
+        console.error('Failed to parse SSE message', err)
+      }
+    })
+  }
+})
+
+function handleLoginSuccess(user: any) {
+  currentUser.value = user
+}
+
+async function logout() {
+  await $fetch('/api/auth/logout', { method: 'POST' })
+  currentUser.value = null
+  showPlaylists.value = false
+}
+
+function handleAddToPlaylist(song: Song) {
+  if (!currentUser.value) {
+    showAuthModal.value = true
+    return
+  }
+  songToAddToPlaylist.value = song
+  showPlaylistSelector.value = true
+}
+
+function handleSongAddedToPlaylist(playlistId: string, song: any) {
+  if (playlistsSidebarRef.value) {
+    playlistsSidebarRef.value.refreshPlaylistIfActive(playlistId)
+  }
+}
+
+async function handlePlayFromPlaylist(song: any) {
+  await handleSelectSong(song as Song, 'playlist')
+}
 
 function formatMeta(val: string | undefined | null) {
   if (!val || val.toLowerCase() === 'null') return '-'
@@ -371,8 +538,6 @@ const displayLyrics = computed<LyricLine[]>(() => {
 async function handleSearch(query: string) {
   error.value = ''
   isSearching.value = true
-  selectedSong.value = null
-  lyrics.value = []
 
   try {
     const data = await $fetch<{ results: Song[] }>('/api/search', {
@@ -394,7 +559,7 @@ function handleClearSearch() {
 }
 
 // ── Song selection — source is derived from the prefixed ID ──
-async function handleSelectSong(song: Song) {
+async function handleSelectSong(song: Song, context: 'search' | 'playlist' = 'search') {
   error.value = ''
   selectedSong.value = song
   searchResults.value = []
@@ -407,6 +572,7 @@ async function handleSelectSong(song: Song) {
         id: song.id,
         name: song.name,
         artist: song.artist,
+        context
       },
     })
 
@@ -433,5 +599,44 @@ function clearSelection() {
   showDetails.value = false
   songMeta.value = {}
   hasChinese.value = true
+}
+
+async function handleManualRefresh() {
+  if (!selectedSong.value || isRefreshing.value) return;
+  
+  const now = Date.now();
+  const lastRefresh = refreshCooldowns.value[selectedSong.value.id] || 0;
+  // 60 second cooldown per song
+  if (now - lastRefresh < 60000) {
+    error.value = "Please wait a moment before refreshing this song again.";
+    return;
+  }
+  
+  isRefreshing.value = true;
+  error.value = '';
+  
+  try {
+    const data = await $fetch<{ success: boolean; lyrics: LyricLine[]; meta?: any; hasChinese?: boolean; error?: string }>('/api/lyrics', {
+      params: {
+        id: selectedSong.value.id,
+        name: selectedSong.value.name,
+        artist: selectedSong.value.artist,
+        forceRefresh: 'true'
+      },
+    })
+
+    if (data.success) {
+      lyrics.value = data.lyrics
+      songMeta.value = data.meta || {}
+      hasChinese.value = data.hasChinese !== false
+      refreshCooldowns.value[selectedSong.value.id] = Date.now();
+    } else {
+      error.value = data.error || 'Failed to refresh lyrics.'
+    }
+  } catch (e: any) {
+    error.value = e.data?.statusMessage || 'Failed to refresh lyrics.'
+  } finally {
+    isRefreshing.value = false;
+  }
 }
 </script>

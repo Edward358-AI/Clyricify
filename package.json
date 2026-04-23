@@ -14,7 +14,9 @@
     "@google/generative-ai": "^0.24.1",
     "@meting/core": "^1.6.1",
     "@tailwindcss/vite": "^4.2.2",
+    "better-sqlite3": "^12.9.0",
     "dotenv": "^17.4.2",
+    "drizzle-orm": "^0.45.2",
     "google-translate-api-x": "^10.7.2",
     "NeteaseCloudMusicApi": "^4.30.0",
     "nuxt": "^4.4.2",
@@ -25,6 +27,8 @@
     "vue-router": "^5.0.4"
   },
   "devDependencies": {
-    "@types/node": "^25.6.0"
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^25.6.0",
+    "drizzle-kit": "^0.31.10"
   }
 }
