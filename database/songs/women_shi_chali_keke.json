@@ -109,15 +109,9 @@
       "isPlainText": false
     },
     {
-      "chinese": "我们为福音",
-      "pinyin": "wǒ men wèi fú yīn",
-      "english": "we for the gospel",
-      "isPlainText": false
-    },
-    {
-      "chinese": "而战，我们荣耀他的名字",
-      "pinyin": "ér zhàn ， wǒ men róng yào tā de míng zì",
-      "english": "And fight, we honor his name",
+      "chinese": "我们为福音而战，我们荣耀他的名字",
+      "pinyin": "wǒ men wèi fú yīn ér zhàn ， wǒ men róng yào tā de míng zì",
+      "english": "We fight for the gospel and we glorify his name",
       "isPlainText": false
     },
     {
