@@ -3,7 +3,8 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "build": "nuxt build",
+    "build": "nuxt typecheck && nuxt build",
+    "typecheck": "nuxt typecheck",
     "dev": "nuxt dev",
     "dev:host": "nuxt dev --host",
     "generate": "nuxt generate",
@@ -31,6 +32,8 @@
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.6.0",
-    "drizzle-kit": "^0.31.10"
+    "drizzle-kit": "^0.31.10",
+    "typescript": "~5.9.3",
+    "vue-tsc": "^3.3.9"
   }
 }
