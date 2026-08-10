@@ -59,11 +59,14 @@ export default defineEventHandler(async (event) => {
     addedAt: Date.now()
   });
 
-  // Trigger background update queue for the newly added song
+  // Trigger background update queue for the newly added song.
+  // waitUntil keeps the instance alive until the queue drains on serverless.
   if (song.source !== 'local') {
-    import('../../../utils/updateQueue').then(({ lyricUpdateQueue }) => {
-      lyricUpdateQueue.push({ id: song.id, name: song.name, artist: song.artist });
-    });
+    event.waitUntil(
+      import('../../../utils/updateQueue').then(({ lyricUpdateQueue }) =>
+        lyricUpdateQueue.push({ id: song.id, name: song.name, artist: song.artist })
+      )
+    );
   }
 
   return { success: true };

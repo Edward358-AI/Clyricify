@@ -5,11 +5,14 @@ export const lyricUpdateQueue = {
   push(song: { id: string, name: string, artist: string }) {
     // Only local legacy DB items shouldn't be background updated
     if (song.id.startsWith('local_')) return;
-    
+
     // Don't add if already in queue
     if (!this.queue.some(s => s.id === song.id)) {
       this.queue.push(song);
-      this.process();
+      // Return the drain promise so callers can event.waitUntil() it —
+      // on serverless the instance isn't guaranteed CPU after the response
+      // unless the platform is told work is still pending.
+      return this.process();
     }
   },
   

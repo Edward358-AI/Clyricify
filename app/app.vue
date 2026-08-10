@@ -417,6 +417,16 @@ interface LyricLine {
   isPlainText?: boolean
 }
 
+interface LyricsResponse {
+  success: boolean
+  lyrics: LyricLine[]
+  meta?: any
+  hasChinese?: boolean
+  error?: string
+  refreshQueued?: boolean
+  lastUpdated?: number
+}
+
 // ── State ──
 const searchResults = ref<Song[]>([])
 const selectedSong = ref<Song | null>(null)
@@ -448,25 +458,6 @@ onMounted(async () => {
     // Not logged in
   }
 
-  // Connect to Server-Sent Events stream for background updates
-  if (import.meta.client) {
-    const eventSource = new EventSource('/api/stream')
-    
-    eventSource.addEventListener('lyrics_updated', (event) => {
-      try {
-        const data = JSON.parse(event.data)
-        // If the updated song is the one currently being displayed, hot-swap it!
-        if (selectedSong.value && data.id === selectedSong.value.id) {
-          lyrics.value = data.lyrics
-          songMeta.value = data.meta || {}
-          hasChinese.value = data.hasChinese !== false
-          console.log(`[Hot Swap] Lyrics for ${data.id} updated in background!`)
-        }
-      } catch (err) {
-        console.error('Failed to parse SSE message', err)
-      }
-    })
-  }
 })
 
 function handleLoginSuccess(user: any) {
@@ -558,8 +549,59 @@ function handleClearSearch() {
   error.value = ''
 }
 
+// ── Background refresh watcher (replaces the old SSE /api/stream) ──
+// When the server queues a background refresh for the displayed song, briefly
+// poll its version and hot-swap the lyrics from cache once it changes.
+let refreshWatchTimer: ReturnType<typeof setTimeout> | null = null
+
+function stopRefreshWatch() {
+  if (refreshWatchTimer) {
+    clearTimeout(refreshWatchTimer)
+    refreshWatchTimer = null
+  }
+}
+
+function watchForBackgroundRefresh(song: Song, servedVersion: number) {
+  stopRefreshWatch()
+  let attempts = 0
+
+  const check = async () => {
+    refreshWatchTimer = null
+    // Stop if the user has moved on to another song
+    if (!selectedSong.value || selectedSong.value.id !== song.id) return
+
+    try {
+      const v = await $fetch<{ lastUpdated: number }>('/api/lyrics-version', {
+        params: { id: song.id },
+      })
+      if (v.lastUpdated > servedVersion) {
+        const data = await $fetch<LyricsResponse>('/api/lyrics', {
+          params: { id: song.id, name: song.name, artist: song.artist },
+        })
+        if (data.success && selectedSong.value?.id === song.id) {
+          lyrics.value = data.lyrics
+          songMeta.value = data.meta || {}
+          hasChinese.value = data.hasChinese !== false
+          console.log(`[Hot Swap] Lyrics for ${song.id} updated in background!`)
+        }
+        return
+      }
+    } catch {
+      // Transient failure — just try again on the next tick
+    }
+
+    // Background refreshes land within seconds; give up after ~2 minutes
+    if (++attempts < 8) {
+      refreshWatchTimer = setTimeout(check, 15000)
+    }
+  }
+
+  refreshWatchTimer = setTimeout(check, 15000)
+}
+
 // ── Song selection — source is derived from the prefixed ID ──
 async function handleSelectSong(song: Song, context: 'search' | 'playlist' = 'search') {
+  stopRefreshWatch()
   error.value = ''
   selectedSong.value = song
   searchResults.value = []
@@ -567,7 +609,7 @@ async function handleSelectSong(song: Song, context: 'search' | 'playlist' = 'se
   lyrics.value = []
 
   try {
-    const data = await $fetch<{ success: boolean; lyrics: LyricLine[]; meta?: any; hasChinese?: boolean; error?: string }>('/api/lyrics', {
+    const data = await $fetch<LyricsResponse>('/api/lyrics', {
       params: {
         id: song.id,
         name: song.name,
@@ -580,6 +622,9 @@ async function handleSelectSong(song: Song, context: 'search' | 'playlist' = 'se
       lyrics.value = data.lyrics
       songMeta.value = data.meta || {}
       hasChinese.value = data.hasChinese !== false
+      if (data.refreshQueued) {
+        watchForBackgroundRefresh(song, data.lastUpdated || 0)
+      }
     } else {
       error.value = data.error || 'No lyrics found for this song.'
     }
@@ -592,6 +637,7 @@ async function handleSelectSong(song: Song, context: 'search' | 'playlist' = 'se
 
 // ── Clear selection ──
 function clearSelection() {
+  stopRefreshWatch()
   selectedSong.value = null
   lyrics.value = []
   error.value = ''
@@ -614,9 +660,10 @@ async function handleManualRefresh() {
   
   isRefreshing.value = true;
   error.value = '';
-  
+  stopRefreshWatch();
+
   try {
-    const data = await $fetch<{ success: boolean; lyrics: LyricLine[]; meta?: any; hasChinese?: boolean; error?: string }>('/api/lyrics', {
+    const data = await $fetch<LyricsResponse>('/api/lyrics', {
       params: {
         id: selectedSong.value.id,
         name: selectedSong.value.name,

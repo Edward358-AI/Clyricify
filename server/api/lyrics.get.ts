@@ -378,6 +378,8 @@ export default defineEventHandler(async (event) => {
     let meta: SongMeta = {}
     let lyricLines: string[] = []
     let cachedFromDb = false
+    let refreshQueued = false
+    let rawLrc = ''
 
     // Check SQLite cache first
     const cachedSong = await db.query.songs.findFirst({
@@ -395,9 +397,14 @@ export default defineEventHandler(async (event) => {
         const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
         const needsUpdate = context === 'search' || (Date.now() - cachedSong.lastUpdated > SEVEN_DAYS);
         if (needsUpdate) {
-           import('../utils/updateQueue').then(({ lyricUpdateQueue }) => {
-             lyricUpdateQueue.push({ id, name: name || '', artist: artist || '' });
-           });
+          refreshQueued = true
+          // waitUntil keeps the instance alive until the queue drains;
+          // without it the platform may suspend CPU right after the response.
+          event.waitUntil(
+            import('../utils/updateQueue').then(({ lyricUpdateQueue }) =>
+              lyricUpdateQueue.push({ id, name: name || '', artist: artist || '' })
+            )
+          )
         }
       }
 
@@ -412,7 +419,6 @@ export default defineEventHandler(async (event) => {
         hasChinese: data.lyrics.some((l: any) => l.chinese && l.chinese.trim().length > 0)
       }
     } else {
-      let rawLrc: string = ''
       const config = useRuntimeConfig()
 
       switch (source) {
@@ -428,12 +434,10 @@ export default defineEventHandler(async (event) => {
       }
 
       // Skip Gemini if this is a background update and the raw LRC hasn't changed
-      let skippedGemini = false;
       if (isBackground && cachedSong && cachedSong.rawLrc === rawLrc) {
         console.log(`[Background] rawLrc unchanged for ${id}. Skipping Gemini.`);
         meta = cachedSong.metaJson ? JSON.parse(cachedSong.metaJson) : {}
         lyricLines = cachedSong.lyricsJson ? JSON.parse(cachedSong.lyricsJson) : []
-        skippedGemini = true;
       } else {
         // Strip timestamps
         const allLines = stripTimestamps(rawLrc)
@@ -524,21 +528,16 @@ export default defineEventHandler(async (event) => {
       } catch (cacheErr) {
         console.error('Failed to cache to SQLite:', cacheErr);
       }
-      
-      // If it's a background update and we actually processed new lyrics (didn't skip Gemini), emit SSE event!
-      if (isBackground && typeof skippedGemini !== 'undefined' && !skippedGemini) {
-        import('../utils/eventBus').then(({ lyricEventBus }) => {
-          lyricEventBus.emit('updated', {
-            id,
-            lyrics,
-            meta,
-            hasChinese
-          })
-        });
-      }
     }
 
-    return { success: true, lyrics, meta, hasChinese }
+    return {
+      success: true,
+      lyrics,
+      meta,
+      hasChinese,
+      refreshQueued,
+      lastUpdated: cachedFromDb && cachedSong ? cachedSong.lastUpdated : Date.now(),
+    }
   } catch (error: any) {
     console.error(`[/api/lyrics] Error (${source}):`, error.message || error)
     return {
