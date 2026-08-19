@@ -1,7 +1,7 @@
 import { db } from '../../database';
 import { users } from '../../database/schema';
-import crypto from 'crypto';
 import { createUserSession } from '../../utils/session';
+import { verifyPassword, needsRehash, hashPassword } from '../../utils/password';
 import { eq } from 'drizzle-orm';
 
 export default defineEventHandler(async (event) => {
@@ -20,11 +20,16 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Invalid credentials' });
   }
 
-  const [salt, key] = user.passwordHash.split(':');
-  const hash = crypto.pbkdf2Sync(password, salt as string, 1000, 64, 'sha512').toString('hex');
-
-  if (key !== hash) {
+  const valid = await verifyPassword(password, user.passwordHash);
+  if (!valid) {
     throw createError({ statusCode: 400, statusMessage: 'Invalid credentials' });
+  }
+
+  // Upgrade legacy PBKDF2 hashes to scrypt now that we have the plaintext
+  if (needsRehash(user.passwordHash)) {
+    await db.update(users)
+      .set({ passwordHash: await hashPassword(password) })
+      .where(eq(users.id, user.id));
   }
 
   await createUserSession(event, user.id);
