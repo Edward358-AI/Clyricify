@@ -1,8 +1,12 @@
 // Deletes ALL rows from the production `sessions` table on Turso.
 // Every user is logged out; leaked session IDs become useless.
-// Usage: set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN, then
+// Usage: set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN (or put them in a
+// git-ignored .env.turso file), then
 //   node scripts/purge-sessions.mjs
 import { createClient } from '@libsql/client';
+import { config } from 'dotenv';
+
+config({ path: '.env.turso' });
 
 const url = process.env.TURSO_DATABASE_URL;
 const authToken = process.env.TURSO_AUTH_TOKEN;
