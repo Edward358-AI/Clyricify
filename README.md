@@ -2,14 +2,14 @@
 
 Clyricify is a high-performance web application designed for music lovers who want deep insights into song lyrics, particularly for Chinese-language music. It solves the problem of "raw" lyrics by providing a cleaned, translated, and pinyin-annotated experience via a multi-source orchestration system.
 
-## 🎯 Core Objectives
+## Core Objectives
 - **Accessibility**: Provide English translations and pinyin for Chinese lyrics to help non-native speakers understand and sing along.
 - **Reliability**: Use a tiered fallback system to ensure lyrics are fetched even when primary AI services or specific music APIs fail.
 - **Speed**: Interleave multiple search sources in parallel to provide the best possible variety of results instantly.
 
 ---
 
-## 🚀 Key Features
+## Key Features
 
 ### 1. Multi-Source Search Orchestration
 Instead of relying on one provider, Clyricify searches four distinct sources simultaneously:
@@ -33,7 +33,7 @@ For every Chinese line detected:
 
 ---
 
-## 🛠 Technical Specifications
+## Technical Specifications
 
 ### Tech Stack
 - **Frontend**: Nuxt 3 (framework), Vue 3 (components), Tailwind CSS (styling).
@@ -48,7 +48,7 @@ For every Chinese line detected:
 
 ---
 
-## 🧩 The "Ins and Outs": How it works
+## The "Ins and Outs": How it works
 1. **Search Phase**: The user types a query. The backend fires 4 parallel requests. They are merged into a single list where labels (**LRCLIB**, **NETEASE**, **KUGOU**, **LOCAL DB**) are applied.
 2. **Fetch Phase**: When a song is clicked, the backend hits the specific source's ID.
 3. **Processing Phase**:
