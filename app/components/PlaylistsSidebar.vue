@@ -1,6 +1,11 @@
 <template>
-  <Transition name="slide-right">
-    <div v-if="isOpen" class="fixed inset-y-0 right-0 z-40 w-80 bg-bg-primary border-l border-border-subtle shadow-2xl flex flex-col">
+  <!-- In normal flow above 700px (pushes the page); an overlay at 700px and below, where there is no room to push into -->
+  <aside
+    class="fixed right-0 top-0 h-dvh shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out z-40 min-[701px]:sticky min-[701px]:z-auto"
+    :class="isOpen ? 'w-80' : 'w-0'"
+    :inert="!isOpen"
+  >
+    <div class="w-80 h-full bg-bg-primary border-l border-border-subtle flex flex-col">
       <!-- Header -->
       <div class="px-6 py-5 border-b border-border-subtle flex items-center justify-between">
         <h2 class="text-lg font-bold text-text-primary">Your Playlists</h2>
@@ -40,21 +45,53 @@
       <!-- View: Playlist Details (Songs) -->
       <div v-else class="flex-1 flex flex-col overflow-hidden">
         <div class="px-4 py-3 bg-bg-surface border-b border-border-subtle flex items-center gap-2">
-          <button @click="selectedPlaylist = null" class="p-1 rounded text-text-muted hover:text-text-primary hover:bg-bg-hover">
+          <button @click="closePlaylist" class="p-1 rounded text-text-muted hover:text-text-primary hover:bg-bg-hover">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="15 18 9 12 15 6"/>
             </svg>
           </button>
           <span class="text-sm font-bold text-text-primary truncate">{{ selectedPlaylist.name }}</span>
         </div>
-        
+
+        <!-- Playlist song search -->
+        <div v-if="songs.length > 0 || songQuery" class="px-3 pt-3 pb-1">
+          <div class="relative">
+            <svg class="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input
+              v-model="songQuery"
+              @keydown.esc="songQuery = ''"
+              type="text"
+              placeholder="Search this playlist..."
+              autocomplete="off"
+              class="w-full bg-bg-surface border border-border-subtle rounded-lg pl-9 pr-8 py-1.5 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent"
+            />
+            <button
+              v-if="songQuery"
+              @click="songQuery = ''"
+              class="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
+              aria-label="Clear playlist search"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
         <div class="flex-1 overflow-y-auto p-2">
           <div v-if="isLoadingSongs" class="text-center py-8 text-text-muted text-sm">Loading songs...</div>
           <div v-else-if="songs.length === 0" class="text-center py-8 text-text-muted text-sm">
             Playlist is empty. Add songs from search!
           </div>
+          <div v-else-if="filteredSongs.length === 0" class="text-center py-8 text-text-muted text-sm">
+            No songs match "{{ songQuery.trim() }}"
+          </div>
           <ul v-else class="space-y-1">
-            <li v-for="song in songs" :key="song.id" class="group/song relative">
+            <li v-for="song in filteredSongs" :key="song.id" class="group/song relative">
               <button @click="$emit('play', song)" class="w-full text-left p-2 hover:bg-bg-hover rounded-lg transition-colors flex items-center gap-3 pr-10">
                 <img v-if="song.coverUrl" :src="song.coverUrl + '?param=48y48'" class="w-10 h-10 rounded object-cover" />
                 <div v-else class="w-10 h-10 rounded bg-bg-surface flex items-center justify-center text-text-muted">♪</div>
@@ -74,11 +111,11 @@
         </div>
       </div>
     </div>
-  </Transition>
+  </aside>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 
 const props = defineProps<{ isOpen: boolean }>()
 const emit = defineEmits<{ close: [], play: [song: any] }>()
@@ -91,6 +128,15 @@ const isCreating = ref(false)
 const selectedPlaylist = ref<any>(null)
 const songs = ref<any[]>([])
 const isLoadingSongs = ref(false)
+const songQuery = ref('')
+
+const filteredSongs = computed(() => {
+  const q = songQuery.value.trim().toLowerCase()
+  if (!q) return songs.value
+  return songs.value.filter(s =>
+    [s.name, s.artist, s.album].some(field => field?.toLowerCase().includes(q))
+  )
+})
 
 watch(() => props.isOpen, (open) => {
   if (open) {
@@ -131,7 +177,14 @@ async function createPlaylist() {
   }
 }
 
+function closePlaylist() {
+  selectedPlaylist.value = null
+  songQuery.value = ''
+}
+
 async function selectPlaylist(pl: any) {
+  // Re-selecting the open playlist is a refresh, so keep the user's query
+  if (selectedPlaylist.value?.id !== pl.id) songQuery.value = ''
   selectedPlaylist.value = pl
   isLoadingSongs.value = true
   songs.value = []
@@ -167,14 +220,3 @@ defineExpose({
   }
 })
 </script>
-
-<style scoped>
-.slide-right-enter-active,
-.slide-right-leave-active {
-  transition: transform 0.3s ease;
-}
-.slide-right-enter-from,
-.slide-right-leave-to {
-  transform: translateX(100%);
-}
-</style>

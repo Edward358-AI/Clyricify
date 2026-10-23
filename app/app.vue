@@ -1,11 +1,13 @@
 <template>
-  <div class="min-h-dvh bg-bg-primary relative overflow-hidden">
+  <div class="min-h-dvh bg-bg-primary relative overflow-clip flex">
     <!-- Subtle background gradient orbs -->
     <div class="fixed inset-0 pointer-events-none overflow-hidden -z-10">
       <div class="absolute -top-40 -right-40 w-80 h-80 rounded-full bg-accent/[0.03] blur-[100px]"></div>
       <div class="absolute -bottom-40 -left-40 w-96 h-96 rounded-full bg-accent/[0.02] blur-[120px]"></div>
     </div>
 
+    <!-- Page column: shrinks when the playlists sidebar is open -->
+    <div class="flex-1 min-w-0">
     <!-- Header -->
     <header class="w-full border-b border-border-subtle">
       <div class="max-w-3xl mx-auto px-6 py-5 flex items-center justify-between">
@@ -290,18 +292,19 @@
         </p>
       </div>
     </footer>
-
-    <AuthModal
-      :isOpen="showAuthModal"
-      @close="showAuthModal = false"
-      @success="handleLoginSuccess"
-    />
+    </div>
 
     <PlaylistsSidebar
       ref="playlistsSidebarRef"
       :isOpen="showPlaylists"
       @close="showPlaylists = false"
       @play="handlePlayFromPlaylist"
+    />
+
+    <AuthModal
+      :isOpen="showAuthModal"
+      @close="showAuthModal = false"
+      @success="handleLoginSuccess"
     />
 
     <PlaylistSelectorModal
@@ -485,7 +488,13 @@ function handleSongAddedToPlaylist(playlistId: string, song: any) {
   }
 }
 
+// Below this width an open 320px sidebar leaves too little room for the 768px lyrics column
+const SIDEBAR_AUTO_CLOSE_BELOW_PX = 1420
+
 async function handlePlayFromPlaylist(song: any) {
+  if (window.innerWidth < SIDEBAR_AUTO_CLOSE_BELOW_PX) {
+    showPlaylists.value = false
+  }
   await handleSelectSong(song as Song, 'playlist')
 }
 
