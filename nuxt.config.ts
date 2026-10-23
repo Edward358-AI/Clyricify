@@ -5,6 +5,8 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
 
+  modules: ['@vercel/analytics'],
+
   runtimeConfig: {
     geminiApiKey: process.env.GEMINI_API_KEY || '',
     geminiApiFallback: process.env.GEMINI_API_FALLBACK || '',

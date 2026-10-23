@@ -17,6 +17,7 @@
     "@libsql/client": "^0.17.2",
     "@meting/core": "^1.6.1",
     "@tailwindcss/vite": "^4.2.2",
+    "@vercel/analytics": "^2.0.1",
     "better-sqlite3": "^12.9.0",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
@@ -35,6 +36,11 @@
     "drizzle-kit": "^0.31.10",
     "typescript": "~5.9.3",
     "vue-tsc": "^3.3.9"
+  },
+  "overrides": {
+    "@vercel/analytics": {
+      "vue-router": "$vue-router"
+    }
   },
   "allowScripts": {
     "esbuild@0.18.20": true,
